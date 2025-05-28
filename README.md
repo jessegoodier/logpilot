@@ -1,7 +1,7 @@
-# Kube Log Viewer
+# Kube Web Log Viewer
 
 A simple Kubernetes log viewer web app built with Flask and the Kubernetes Python client. View logs from pods in your cluster with a modern web UI.
-[screenshot](log-viewer.yaml)
+![screenshot](kube-web-log-viewer.png)
 
 ## Table of Contents
 
@@ -42,13 +42,13 @@ Edit build.sh, then build and push a multi-arch image using `build.sh`:
 2. Create the configmap:
 
     ```sh
-    kubectl create configmap log-viewer --from-file=app.py --from-file=index.html -n YOUR_NAMESPACE 
+    kubectl create configmap log-viewer --from-file=app.py --from-file=index.html -n YOUR_NAMESPACE
     ```
 
 3. Apply the main manifest:
 
     ```sh
-    kubectl apply -f log-viewer.yaml -n YOUR_NAMESPACE 
+    kubectl apply -f log-viewer.yaml -n YOUR_NAMESPACE
     ```
 
 4. Port-foward to the service:
