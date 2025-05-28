@@ -1,0 +1,131 @@
+# Kubernetes Manifests for Kube Log Viewer
+
+# Note: Apply these manifests to the namespace where you want the application to run.
+# You can specify the namespace in each metadata section or use `kubectl apply -f <file> -n <your-namespace>`.
+
+# --- ServiceAccount ---
+# Grants an identity to the pods running the application.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kube-log-viewer-sa
+  # namespace: your-target-namespace # Specify if not using kubectl -n flag
+
+---
+# --- Role ---
+# Defines permissions that the application needs within its namespace.
+# It needs to list pods and get logs from pods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kube-log-viewer-role
+  # namespace: your-target-namespace # Should match the namespace of the ServiceAccount and Deployment
+rules:
+- apiGroups: [""] # Core API group
+  resources: ["pods", "pods/log"] # Allows access to pods and their logs
+  verbs: ["get", "list"] # Allows reading/listing these resources
+
+---
+# --- RoleBinding ---
+# Binds the 'kube-log-viewer-role' to the 'kube-log-viewer-sa' ServiceAccount.
+# This grants the permissions defined in the Role to the pods using the ServiceAccount.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kube-log-viewer-rb
+  # namespace: your-target-namespace # Should match the Role and ServiceAccount namespace
+subjects:
+- kind: ServiceAccount
+  name: kube-log-viewer-sa
+  # namespace: your-target-namespace # Must be the namespace where the SA is defined
+roleRef:
+  kind: Role # Referring to a Role (not ClusterRole)
+  name: kube-log-viewer-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# --- Deployment ---
+# Manages the deployment of your application pods.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-log-viewer-deployment
+  # namespace: your-target-namespace
+  labels:
+    app: kube-log-viewer
+spec:
+  replicas: 1 # Start with one replica
+  selector:
+    matchLabels:
+      app: kube-log-viewer # Must match labels in the pod template
+  template:
+    metadata:
+      labels:
+        app: kube-log-viewer # Labels applied to the pods
+    spec:
+      serviceAccountName: kube-log-viewer-sa # Use the ServiceAccount created above
+      containers:
+      - name: kube-log-viewer-container
+        image: jgoodier/python-log-viewer:0.0.5
+        command: ["gunicorn", "--bind", "0.0.0.0:5001", "app:app"]
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5001
+        env:
+        - name: K8S_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "1500m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5001
+          # initialDelaySeconds: 10
+          # periodSeconds: 15
+          # timeoutSeconds: 2
+          # failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5001
+          # initialDelaySeconds: 5
+          # periodSeconds: 20
+          # timeoutSeconds: 1
+          # failureThreshold: 3
+        volumeMounts:
+        - name: log-viewer-config
+          mountPath: /app # Change this to where your app expects app.py and index.html
+          # If you want to mount as read-only:
+          readOnly: true
+      volumes:
+      - name: log-viewer-config
+        configMap:
+          name: log-viewer
+
+---
+# --- Service ---
+# Exposes your application within the Kubernetes cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-log-viewer-service
+  # namespace: your-target-namespace
+  labels:
+    app: kube-log-viewer
+spec:
+  type: ClusterIP # Default, exposes the service on an internal IP in the cluster.
+                 # Use NodePort or LoadBalancer for external access if needed.
+  selector:
+    app: kube-log-viewer # Selects pods with this label (must match Deployment's pod labels)
+  ports:
+  - name: http
+    protocol: TCP
+    port: 5001 # The port the Service will listen on
+    targetPort: 5001 # The port on the pod that the Service will forward traffic to

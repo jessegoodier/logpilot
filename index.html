@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubernetes Log Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2d3748; /* dark:gray-700 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568; /* dark:gray-600 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #718096; /* dark:gray-500 */
+        }
+        .log-line mark { /* For search highlighting */
+            background-color: #f6e05e; /* yellow-300 */
+            color: #2d3748; /* gray-800 */
+            padding: 0.1em;
+            border-radius: 0.2em;
+        }
+        /* Basic transition for theme toggle */
+        body, .bg-gray-100, .bg-gray-800, .text-gray-900, .text-gray-100 {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .loader {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script>
+        // Tailwind dark mode configuration
+        tailwind.config = {
+            darkMode: 'class', 
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans antialiased">
+
+    <div class="container mx-auto px-4 py-4 min-h-screen flex flex-col">
+        <header class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 mb-4 sticky top-0 z-10">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
+                <div>
+                    <label for="podSelector" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Pod</label>
+                    <select id="podSelector" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Please select a pod</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="sortOrder" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Order</label>
+                    <select id="sortOrder" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="asc">Newest First</option>
+                        <option value="desc">Oldest First</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="numLines" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lines</label>
+                    <select id="numLines" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="100">Last 100</option>
+                        <option value="1000">Last 1000</option>
+                        <option value="0">All</option> 
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="timestampType" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Timestamp</label>
+                    <select id="timestampType" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="since">Time Since</option>
+                        <option value="utc">UTC</option>
+                    </select>
+                </div>
+
+                <div class="lg:col-span-1 xl:col-span-1">
+                    <label for="searchBox" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Search</label>
+                    <input type="text" id="searchBox" placeholder="Enter to search..." class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+
+                <div>
+                    <label for="themeToggle" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Theme</label>
+                    <button id="themeToggle" class="mt-1 w-full py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600">
+                        Toggle Light/Dark
+                    </button>
+                </div>
+            </div>
+            <div id="namespaceDisplay" class="mt-3 text-xs text-gray-500 dark:text-gray-400">Namespace: <span id="namespaceValue">Loading...</span></div>
+            <div id="errorDisplay" class="mt-2 text-sm text-red-600 dark:text-red-400"></div>
+            <div id="loadingIndicator" class="hidden mt-2">
+                <div class="loader"></div>
+                <p class="text-center text-sm text-gray-500 dark:text-gray-400">Loading logs...</p>
+            </div>
+        </header>
+
+        <main class="flex-grow bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 overflow-hidden">
+            <pre id="logOutput" class="whitespace-pre-wrap break-all overflow-auto h-full text-sm leading-relaxed"></pre>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const podSelector = document.getElementById('podSelector');
+            const sortOrder = document.getElementById('sortOrder');
+            const numLines = document.getElementById('numLines');
+            const timestampType = document.getElementById('timestampType');
+            const searchBox = document.getElementById('searchBox');
+            const themeToggle = document.getElementById('themeToggle');
+            const logOutput = document.getElementById('logOutput');
+            const namespaceValue = document.getElementById('namespaceValue');
+            const errorDisplay = document.getElementById('errorDisplay');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+
+            let currentLogs = []; 
+
+            // --- Theme Toggle ---
+            const applyTheme = () => {
+                if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            };
+
+            themeToggle.addEventListener('click', () => {
+                if (localStorage.theme === 'dark') {
+                    localStorage.theme = 'light';
+                } else {
+                    localStorage.theme = 'dark';
+                }
+                applyTheme();
+            });
+            applyTheme();
+
+            // --- API Calls ---
+            async function fetchFromServer(endpoint, options = {}) {
+                errorDisplay.textContent = ''; 
+                try {
+                    const absoluteUrl = new URL(endpoint, window.location.href).href;
+                    const response = await fetch(absoluteUrl, options);
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: `HTTP error! status: ${response.status} on ${absoluteUrl}` }));
+                        throw new Error(errorData.message || `HTTP error! status: ${response.status} on ${absoluteUrl}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error(`Error fetching ${endpoint} (resolved to ${new URL(endpoint, window.location.href).href}):`, error);
+                    errorDisplay.textContent = `Error: ${error.message}`;
+                    throw error; 
+                }
+            }
+            
+            async function fetchPods() {
+                try {
+                    const data = await fetchFromServer('/api/pods');
+                    namespaceValue.textContent = data.namespace || 'N/A';
+                    podSelector.innerHTML = '<option value="">Please select a pod</option>'; 
+                    if (data.pods && data.pods.length > 0) {
+                        data.pods.forEach(podName => {
+                            const option = document.createElement('option');
+                            option.value = podName;
+                            option.textContent = podName;
+                            podSelector.appendChild(option);
+                        });
+                        if (data.pods.length === 1) {
+                            podSelector.value = data.pods[0];
+                            fetchAndDisplayLogs(); 
+                        }
+                    } else {
+                        podSelector.innerHTML = '<option value="">No pods found</option>';
+                    }
+                } catch (error) {
+                    namespaceValue.textContent = 'Error loading';
+                }
+            }
+
+            async function fetchAndDisplayLogs() {
+                const selectedPod = podSelector.value;
+                if (!selectedPod) {
+                    logOutput.textContent = 'Please select a pod to view logs.';
+                    currentLogs = [];
+                    return;
+                }
+                loadingIndicator.classList.remove('hidden');
+                logOutput.textContent = ''; 
+
+                const params = new URLSearchParams({
+                    pod_name: selectedPod,
+                    sort_order: sortOrder.value,
+                    tail_lines: numLines.value,
+                    search_string: searchBox.value.trim() 
+                });
+
+                try {
+                    const data = await fetchFromServer(`/api/logs?${params.toString()}`);
+                    currentLogs = data.logs || [];
+                    renderLogs();
+                } catch (error) {
+                    currentLogs = [];
+                } finally {
+                    loadingIndicator.classList.add('hidden');
+                }
+            }
+
+            // --- Log Rendering ---
+            function renderLogs() {
+                logOutput.innerHTML = ''; 
+                
+                if (currentLogs.length === 0) {
+                    logOutput.textContent = 'No logs to display for the current selection.';
+                    if (searchBox.value.trim() && podSelector.value) {
+                         logOutput.textContent += `\nOr no logs match your search term: "${searchBox.value.trim()}"`;
+                    }
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+                const searchTerm = searchBox.value.trim(); // For search highlighting
+
+                const logColoringRules = {
+                    error: {
+                        terms: ['error', 'err', 'fatal', 'panic', 'exception', 'critical', 'failed', 'failure'],
+                        classes: ['text-red-600', 'dark:text-red-400', 'font-semibold']
+                    },
+                    warning: {
+                        terms: ['warning', 'warn', 'wrn'],
+                        classes: ['text-orange-500', 'dark:text-orange-400']
+                    },
+                    info: {
+                        terms: ['info', 'notice'],
+                        classes: ['text-green-600', 'dark:text-green-400']
+                    }
+                };
+
+                currentLogs.forEach(logEntry => {
+                    const lineDiv = document.createElement('div');
+                    lineDiv.classList.add('log-line', 'py-0.5');
+
+                    const timestampSpan = document.createElement('span');
+                    timestampSpan.classList.add('mr-3', 'text-gray-500', 'dark:text-gray-400', 'select-none');
+                    timestampSpan.textContent = formatTimestamp(logEntry.timestamp) + ' ';
+                    
+                    const messageSpan = document.createElement('span');
+                    messageSpan.classList.add('log-message');
+                    
+                    let messageContent = logEntry.message; // Original message content
+
+                    // Apply keyword coloring first
+                    let coloredMessageContent = messageContent;
+                    const levelsInOrder = ['error', 'warning', 'info']; // Process in this order
+
+                    for (const level of levelsInOrder) {
+                        const rule = logColoringRules[level];
+                        if (rule) {
+                            for (const term of rule.terms) {
+                                // Regex for whole word, case-insensitive
+                                // \b ensures "word boundary"
+                                const termRegex = new RegExp(`\\b(${escapeRegExp(term)})\\b`, 'gi');
+                                coloredMessageContent = coloredMessageContent.replace(termRegex, (match) => {
+                                    return `<span class="${rule.classes.join(' ')}">${match}</span>`;
+                                });
+                            }
+                        }
+                    }
+                    
+                    // Apply search highlighting on the potentially colorized message
+                    if (searchTerm) {
+                        // Need to be careful if search term overlaps with colored spans.
+                        // For simplicity, this will highlight search term even if it's inside a colored span's text.
+                        // A more complex solution would involve parsing HTML, but this is usually acceptable.
+                        const searchRegex = new RegExp(`(${escapeRegExp(searchTerm)})`, 'gi');
+                        
+                        // Avoid re-marking already marked search terms if coloring added marks
+                        // This simple replace should work fine as long as coloring doesn't add <mark>
+                        coloredMessageContent = coloredMessageContent.replace(searchRegex, (match, p1) => {
+                            // Check if we are inside an HTML tag already (simple check)
+                            // This is a heuristic and might not cover all edge cases of nested HTML.
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = coloredMessageContent;
+                            if (tempDiv.textContent.includes(match)) { // if match is not part of HTML tag itself
+                                return `<mark>${p1}</mark>`;
+                            }
+                            return match; // if it's part of a tag, don't mark it
+                        });
+                    }
+
+                    messageSpan.innerHTML = coloredMessageContent; // Use innerHTML for colored spans and <mark>
+
+                    lineDiv.appendChild(timestampSpan);
+                    lineDiv.appendChild(messageSpan);
+                    fragment.appendChild(lineDiv);
+                });
+                logOutput.appendChild(fragment);
+            }
+            
+            function escapeRegExp(string) {
+                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+            }
+
+            // --- Timestamp Formatting ---
+            function formatTimestamp(utcTimestamp) {
+                if (!utcTimestamp) return "[No Timestamp]";
+                const date = new Date(utcTimestamp);
+                if (isNaN(date)) return "[Invalid Date]";
+
+                if (timestampType.value === 'utc') {
+                    return date.toISOString();
+                } else { 
+                    return timeSince(date);
+                }
+            }
+
+            function timeSince(date) {
+                const seconds = Math.floor((new Date() - date) / 1000);
+                let interval = seconds / 31536000; 
+                if (interval > 1) return Math.floor(interval) + "y ago";
+                interval = seconds / 2592000; 
+                if (interval > 1) return Math.floor(interval) + "mo ago";
+                interval = seconds / 86400; 
+                if (interval > 1) return Math.floor(interval) + "d ago";
+                interval = seconds / 3600; 
+                if (interval > 1) return Math.floor(interval) + "h ago";
+                interval = seconds / 60; 
+                if (interval > 1) return Math.floor(interval) + "m ago";
+                if (seconds < 0) return "just now"; 
+                return Math.max(0, Math.floor(seconds)) + "s ago";
+            }
+
+            // --- Event Listeners ---
+            podSelector.addEventListener('change', fetchAndDisplayLogs);
+            sortOrder.addEventListener('change', fetchAndDisplayLogs); 
+            numLines.addEventListener('change', fetchAndDisplayLogs);
+            timestampType.addEventListener('change', renderLogs); 
+
+            searchBox.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault(); 
+                    fetchAndDisplayLogs(); 
+                }
+            });
+            
+            // Initial data fetch
+            fetchPods();
+        });
+    </script>
+</body>
+</html>
