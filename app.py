@@ -9,6 +9,7 @@ from flask import (
     session,
     render_template_string,
 )
+import json
 
 # --- Flask App Setup ---
 app = Flask(
@@ -181,6 +182,7 @@ def get_logs():
         - sort_order (optional, default 'desc'): 'asc' (oldest first) or 'desc' (newest first).
         - tail_lines (optional, default '100'): Number of lines to fetch. '0' means all lines.
         - search_string (optional): String to filter log messages by (case-insensitive).
+        - follow (optional): If true, stream logs in real-time.
     Returns a JSON object with a list of log entries, each with 'timestamp' and 'message'.
     """
     global KUBE_NAMESPACE
@@ -188,9 +190,10 @@ def get_logs():
     sort_order = request.args.get("sort_order", "desc").lower()
     tail_lines_str = request.args.get("tail_lines", "100")
     search_string = request.args.get("search_string", "").strip().lower()
+    follow = request.args.get("follow", "false").lower() == "true"
 
     app.logger.info(
-        f"Request for /api/logs: pod='{pod_name}', sort='{sort_order}', lines='{tail_lines_str}', search='{search_string}'"
+        f"Request for /api/logs: pod='{pod_name}', sort='{sort_order}', lines='{tail_lines_str}', search='{search_string}', follow='{follow}'"
     )
 
     if not pod_name:
@@ -232,50 +235,87 @@ def get_logs():
             namespace=KUBE_NAMESPACE,
             timestamps=True,
             tail_lines=tail_lines,  # Pass None to get all lines
-            _preload_content=True,  # Set to True to get all content at once as string
-            # If logs are huge, streaming (_preload_content=False) and line-by-line processing is better
-            # For simplicity with search and sort, True is easier here.
+            follow=follow,  # Enable following logs if requested
+            _preload_content=not follow,  # Set to False for streaming when following
         )
 
-        raw_log_lines = log_data_stream.splitlines()
+        if follow:
 
-        app.logger.info(f"Fetched {len(raw_log_lines)} raw lines for pod '{pod_name}'.")
+            def generate():
+                try:
+                    for line in log_data_stream:
+                        if not line:  # Skip empty lines
+                            continue
 
-        processed_logs = []
-        for line_str in raw_log_lines:
-            if not line_str:  # Skip empty lines
-                continue
+                        # Decode bytes to string if needed
+                        if isinstance(line, bytes):
+                            line = line.decode("utf-8")
 
-            log_entry = parse_log_line(line_str)
+                        log_entry = parse_log_line(line)
 
-            # Apply search filter (case-insensitive)
-            if search_string and search_string not in log_entry["message"].lower():
-                continue  # Skip if search string not found
+                        # Apply search filter (case-insensitive)
+                        if (
+                            search_string
+                            and search_string not in log_entry["message"].lower()
+                        ):
+                            continue  # Skip if search string not found
 
-            processed_logs.append(log_entry)
+                        # Send each log entry as a Server-Sent Event
+                        yield f"data: {json.dumps(log_entry)}\n\n"
+                except Exception as e:
+                    app.logger.error(f"Error in log stream: {str(e)}")
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-        app.logger.info(
-            f"{len(processed_logs)} lines after search filter for pod '{pod_name}'."
-        )
+            return app.response_class(
+                generate(),
+                mimetype="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",  # Disable nginx buffering
+                },
+            )
+        else:
+            raw_log_lines = log_data_stream.splitlines()
+            app.logger.info(
+                f"Fetched {len(raw_log_lines)} raw lines for pod '{pod_name}'."
+            )
 
-        # Sorting logic:
-        # Kubernetes API behavior:
-        # - If `tail_lines` is specified, it returns the last N lines (newest first).
-        # - If `tail_lines` is None (all logs), it returns logs oldest first.
+            processed_logs = []
+            for line_str in raw_log_lines:
+                if not line_str:  # Skip empty lines
+                    continue
 
-        # Default order from K8s if tail_lines is used: newest first (desc)
-        # Default order from K8s if tail_lines is NOT used (all): oldest first (asc)
+                log_entry = parse_log_line(line_str)
 
-        if (
-            tail_lines is not None
-        ):  # Last N lines were requested (K8s returned newest first)
-            if sort_order == "asc":
-                processed_logs.reverse()  # Reverse to get oldest of the N lines first
-        else:  # All logs were requested (K8s returned oldest first)
-            if sort_order == "desc":
-                processed_logs.reverse()  # Reverse to get newest first
+                # Apply search filter (case-insensitive)
+                if search_string and search_string not in log_entry["message"].lower():
+                    continue  # Skip if search string not found
 
-        return jsonify({"logs": processed_logs})
+                processed_logs.append(log_entry)
+
+            app.logger.info(
+                f"{len(processed_logs)} lines after search filter for pod '{pod_name}'."
+            )
+
+            # Sorting logic:
+            # Kubernetes API behavior:
+            # - If `tail_lines` is specified, it returns the last N lines (newest first).
+            # - If `tail_lines` is None (all logs), it returns logs oldest first.
+
+            # Default order from K8s if tail_lines is used: newest first (desc)
+            # Default order from K8s if tail_lines is NOT used (all): oldest first (asc)
+
+            if (
+                tail_lines is not None
+            ):  # Last N lines were requested (K8s returned newest first)
+                if sort_order == "asc":
+                    processed_logs.reverse()  # Reverse to get oldest of the N lines first
+            else:  # All logs were requested (K8s returned oldest first)
+                if sort_order == "desc":
+                    processed_logs.reverse()  # Reverse to get newest first
+
+            return jsonify({"logs": processed_logs})
 
     except ApiException as e:
         app.logger.error(
@@ -284,8 +324,6 @@ def get_logs():
         error_message = e.reason
         if e.body:
             try:
-                import json
-
                 error_details = json.loads(e.body)
                 error_message = error_details.get("message", e.reason)
             except json.JSONDecodeError:
