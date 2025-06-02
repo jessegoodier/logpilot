@@ -16,6 +16,7 @@ A simple Kubernetes log viewer web app. View logs from pods in your cluster with
 - List pods in a namespace
 - View and search logs from selected pods
 - Sort logs (newest/oldest first)
+- Follow logs (auto-refresh)
 - Automatically select pod if only one is running
 - Highlight log levels (error, warning, info)
 - Light/dark theme toggle
@@ -60,16 +61,18 @@ We welcome contributions! Please follow these guidelines when submitting a Pull 
 
 1. Fork the repository and create your feature branch (`git checkout -b feature/amazing-feature`)
 2. Make your changes
-3. Run code formatting and linting:
+3. Test your changes, consider using the [test-pod.yaml](tests/test-pod.yaml) to test the app
+   1. Feel free to make better tests
+4. Run code formatting and linting:
    ```sh
    # Format code with black
    uvx black .
    # Run ruff linter
    uvx ruff check --fix .
    ```
-4. Commit your changes with a descriptive commit message
-5. Push to your branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+5. Commit your changes with a descriptive commit message
+6. Push to your branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 Pull Request Guidelines
 
