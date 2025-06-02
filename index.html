@@ -424,7 +424,11 @@
             }
 
             // --- Event Listeners ---
-            podSelector.addEventListener('change', fetchAndDisplayLogs);
+            podSelector.addEventListener('change', () => {
+                logOutput.textContent = '';
+                currentLogs = [];
+                fetchAndDisplayLogs();
+            });
             sortOrder.addEventListener('change', fetchAndDisplayLogs);
             numLines.addEventListener('change', fetchAndDisplayLogs);
             timestampType.addEventListener('change', renderLogs);
