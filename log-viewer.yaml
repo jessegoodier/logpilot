@@ -66,12 +66,27 @@ spec:
       serviceAccountName: kube-log-viewer-sa # Use the ServiceAccount created above
       containers:
       - name: kube-log-viewer-container
-        image: jgoodier/python-log-viewer:0.0.5
-        command: ["gunicorn", "--bind", "0.0.0.0:5001", "app:app"]
+        image: python:3.13-alpine
+        command: ["/bin/sh", "-c"]
+        args: ["pip install -r /app/requirements.txt --break-system-packages && python /app/app.py"]
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5001
         env:
+        - name: API_KEY
+          # if the value is "no-key", the server will not require an api key
+          value: "no-key"
+          # to use an api key from a secret, remove the value above and uncomment the following
+          # create the secret with:
+          # kubectl create secret generic log-viewer-api-key --from-literal=api-key=your-api-key
+          # valueFrom:
+          #   secretKeyRef:
+          #     name: log-viewer-api-key
+          #     key: api-key
+        - name: K8S_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         - name: K8S_NAMESPACE
           valueFrom:
             fieldRef:
@@ -83,22 +98,6 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "1500m"
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 5001
-          # initialDelaySeconds: 10
-          # periodSeconds: 15
-          # timeoutSeconds: 2
-          # failureThreshold: 3
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 5001
-          # initialDelaySeconds: 5
-          # periodSeconds: 20
-          # timeoutSeconds: 1
-          # failureThreshold: 3
         volumeMounts:
         - name: log-viewer-config
           mountPath: /app # Change this to where your app expects app.py and index.html

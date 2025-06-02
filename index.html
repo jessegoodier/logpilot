@@ -48,7 +48,7 @@
     <script>
         // Tailwind dark mode configuration
         tailwind.config = {
-            darkMode: 'class', 
+            darkMode: 'class',
             theme: {
                 extend: {
                     fontFamily: {
@@ -84,10 +84,10 @@
                     <select id="numLines" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                         <option value="100">Last 100</option>
                         <option value="1000">Last 1000</option>
-                        <option value="0">All</option> 
+                        <option value="0">All</option>
                     </select>
                 </div>
-                
+
                 <div>
                     <label for="timestampType" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Timestamp</label>
                     <select id="timestampType" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -134,7 +134,7 @@
             const errorDisplay = document.getElementById('errorDisplay');
             const loadingIndicator = document.getElementById('loadingIndicator');
 
-            let currentLogs = []; 
+            let currentLogs = [];
 
             // --- Theme Toggle ---
             const applyTheme = () => {
@@ -157,7 +157,7 @@
 
             // --- API Calls ---
             async function fetchFromServer(endpoint, options = {}) {
-                errorDisplay.textContent = ''; 
+                errorDisplay.textContent = '';
                 try {
                     const absoluteUrl = new URL(endpoint, window.location.href).href;
                     const response = await fetch(absoluteUrl, options);
@@ -170,15 +170,15 @@
                 } catch (error) {
                     console.error(`Error fetching ${endpoint} (resolved to ${new URL(endpoint, window.location.href).href}):`, error);
                     errorDisplay.textContent = `Error: ${error.message}`;
-                    throw error; 
+                    throw error;
                 }
             }
-            
+
             async function fetchPods() {
                 try {
                     const data = await fetchFromServer('/api/pods');
                     namespaceValue.textContent = data.namespace || 'N/A';
-                    podSelector.innerHTML = '<option value="">Please select a pod</option>'; 
+                    podSelector.innerHTML = '<option value="">Please select a pod</option>';
                     if (data.pods && data.pods.length > 0) {
                         data.pods.forEach(podName => {
                             const option = document.createElement('option');
@@ -186,9 +186,19 @@
                             option.textContent = podName;
                             podSelector.appendChild(option);
                         });
-                        if (data.pods.length === 1) {
+
+                        // If there are exactly 2 pods and one is the current pod, select the other one
+                        if (data.pods.length === 2 && data.current_pod && data.current_pod !== "NOT-SET") {
+                            const otherPod = data.pods.find(pod => pod !== data.current_pod);
+                            if (otherPod) {
+                                podSelector.value = otherPod;
+                                fetchAndDisplayLogs();
+                            }
+                        }
+                        // If there's only one pod, select it
+                        else if (data.pods.length === 1) {
                             podSelector.value = data.pods[0];
-                            fetchAndDisplayLogs(); 
+                            fetchAndDisplayLogs();
                         }
                     } else {
                         podSelector.innerHTML = '<option value="">No pods found</option>';
@@ -206,13 +216,13 @@
                     return;
                 }
                 loadingIndicator.classList.remove('hidden');
-                logOutput.textContent = ''; 
+                logOutput.textContent = '';
 
                 const params = new URLSearchParams({
                     pod_name: selectedPod,
                     sort_order: sortOrder.value,
                     tail_lines: numLines.value,
-                    search_string: searchBox.value.trim() 
+                    search_string: searchBox.value.trim()
                 });
 
                 try {
@@ -228,8 +238,8 @@
 
             // --- Log Rendering ---
             function renderLogs() {
-                logOutput.innerHTML = ''; 
-                
+                logOutput.innerHTML = '';
+
                 if (currentLogs.length === 0) {
                     logOutput.textContent = 'No logs to display for the current selection.';
                     if (searchBox.value.trim() && podSelector.value) {
@@ -263,10 +273,10 @@
                     const timestampSpan = document.createElement('span');
                     timestampSpan.classList.add('mr-3', 'text-gray-500', 'dark:text-gray-400', 'select-none');
                     timestampSpan.textContent = formatTimestamp(logEntry.timestamp) + ' ';
-                    
+
                     const messageSpan = document.createElement('span');
                     messageSpan.classList.add('log-message');
-                    
+
                     let messageContent = logEntry.message; // Original message content
 
                     // Apply keyword coloring first
@@ -286,14 +296,14 @@
                             }
                         }
                     }
-                    
+
                     // Apply search highlighting on the potentially colorized message
                     if (searchTerm) {
                         // Need to be careful if search term overlaps with colored spans.
                         // For simplicity, this will highlight search term even if it's inside a colored span's text.
                         // A more complex solution would involve parsing HTML, but this is usually acceptable.
                         const searchRegex = new RegExp(`(${escapeRegExp(searchTerm)})`, 'gi');
-                        
+
                         // Avoid re-marking already marked search terms if coloring added marks
                         // This simple replace should work fine as long as coloring doesn't add <mark>
                         coloredMessageContent = coloredMessageContent.replace(searchRegex, (match, p1) => {
@@ -316,9 +326,9 @@
                 });
                 logOutput.appendChild(fragment);
             }
-            
+
             function escapeRegExp(string) {
-                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             }
 
             // --- Timestamp Formatting ---
@@ -329,40 +339,40 @@
 
                 if (timestampType.value === 'utc') {
                     return date.toISOString();
-                } else { 
+                } else {
                     return timeSince(date);
                 }
             }
 
             function timeSince(date) {
                 const seconds = Math.floor((new Date() - date) / 1000);
-                let interval = seconds / 31536000; 
+                let interval = seconds / 31536000;
                 if (interval > 1) return Math.floor(interval) + "y ago";
-                interval = seconds / 2592000; 
+                interval = seconds / 2592000;
                 if (interval > 1) return Math.floor(interval) + "mo ago";
-                interval = seconds / 86400; 
+                interval = seconds / 86400;
                 if (interval > 1) return Math.floor(interval) + "d ago";
-                interval = seconds / 3600; 
+                interval = seconds / 3600;
                 if (interval > 1) return Math.floor(interval) + "h ago";
-                interval = seconds / 60; 
+                interval = seconds / 60;
                 if (interval > 1) return Math.floor(interval) + "m ago";
-                if (seconds < 0) return "just now"; 
+                if (seconds < 0) return "just now";
                 return Math.max(0, Math.floor(seconds)) + "s ago";
             }
 
             // --- Event Listeners ---
             podSelector.addEventListener('change', fetchAndDisplayLogs);
-            sortOrder.addEventListener('change', fetchAndDisplayLogs); 
+            sortOrder.addEventListener('change', fetchAndDisplayLogs);
             numLines.addEventListener('change', fetchAndDisplayLogs);
-            timestampType.addEventListener('change', renderLogs); 
+            timestampType.addEventListener('change', renderLogs);
 
             searchBox.addEventListener('keypress', (event) => {
                 if (event.key === 'Enter') {
-                    event.preventDefault(); 
-                    fetchAndDisplayLogs(); 
+                    event.preventDefault();
+                    fetchAndDisplayLogs();
                 }
             });
-            
+
             // Initial data fetch
             fetchPods();
         });

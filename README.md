@@ -17,8 +17,14 @@ A simple Kubernetes log viewer web app built with Flask and the Kubernetes Pytho
 - List pods in a namespace
 - View and search logs from selected pods
 - Sort logs (newest/oldest first)
+- Automatically select pod if only one is running
 - Highlight log levels (error, warning, info)
 - Light/dark theme toggle
+- Tailwind CSS for styling
+- Modern web UI
+- Kubernetes client for fetching logs
+- Gunicorn for production deployment
+- Flask for web server
 
 ## Requirements
 
@@ -28,21 +34,15 @@ A simple Kubernetes log viewer web app built with Flask and the Kubernetes Pytho
 - [gunicorn](https://gunicorn.org/) (for production)
 - Access to a Kubernetes cluster (via kubeconfig or in-cluster)
 
-## Docker Build & Push
-
-Edit build.sh, then build and push a multi-arch image using `build.sh`:
-
-```sh
-./build.sh
-```
 
 ## Quick Start
 
-1. Modify [the app config](log-viewer.yaml) with your image, or use mine if you trust it.
+1. Modify [the app config](log-viewer.yaml)
+1.1. See comments on the API key usage
 2. Create the configmap:
 
     ```sh
-    kubectl create configmap log-viewer --from-file=app.py --from-file=index.html -n YOUR_NAMESPACE
+    kubectl create configmap log-viewer --from-file=app.py --from-file=index.html --from-file=requirements.txt -n YOUR_NAMESPACE
     ```
 
 3. Apply the main manifest:

@@ -1,10 +1,12 @@
 import os
 import re
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, redirect
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 from datetime import datetime, timezone
 import logging
+from functools import wraps
+from flask import Flask, jsonify, request, send_from_directory, session, render_template_string
 
 # --- Flask App Setup ---
 app = Flask(
@@ -42,7 +44,59 @@ v1 = client.CoreV1Api()  # Kubernetes CoreV1API client
 # Determine Kubernetes Namespace
 # Reads from 'K8S_NAMESPACE' environment variable, defaults to 'default'.
 KUBE_NAMESPACE = os.environ.get("K8S_NAMESPACE", "default")
+KUBE_POD_NAME = os.environ.get("K8S_POD_NAME", "NOT-SET")
 app.logger.info(f"Targeting Kubernetes namespace: {KUBE_NAMESPACE}")
+
+app.logger.info(f"Targeting Kubernetes namespace: {KUBE_NAMESPACE}")
+
+app.secret_key = os.urandom(24)  # Required for session
+
+def require_api_key(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        api_key = os.environ.get('API_KEY')
+        if not api_key or api_key == "no-key":
+            return f(*args, **kwargs)
+
+        # Check query string first
+        provided_key = request.args.get('api_key')
+        # Then check header
+        if not provided_key:
+            provided_key = request.headers.get('X-API-Key')
+        # Finally check session
+        if not provided_key:
+            provided_key = session.get('api_key')
+
+        if not provided_key or provided_key != api_key:
+            if request.headers.get('Accept') == 'application/json':
+                return jsonify({'error': 'API key required'}), 401
+            return render_template_string('''
+                <form method="POST" action="/login">
+                    <h2>API Key Required</h2>
+                    <input type="text" name="api_key" placeholder="Enter API Key">
+                    <button type="submit">Submit</button>
+                </form>
+            ''')
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route('/login', methods=['POST'])
+def login():
+    api_key = os.environ.get('API_KEY')
+    provided_key = request.form.get('api_key')
+
+    if not api_key or api_key == "no-key":
+        session['api_key'] = "no-key"
+        app.logger.info("Login successful - no API key required")
+        return redirect(request.referrer or '/')
+
+    if provided_key == api_key:
+        session['api_key'] = provided_key
+        app.logger.info("Login successful with valid API key")
+        return redirect(request.referrer or '/')
+
+    app.logger.warning("Login failed - invalid API key provided")
+    return jsonify({'error': 'Invalid API key'}), 401
 
 
 # --- Helper Functions ---
@@ -72,6 +126,7 @@ def parse_log_line(line_str):
 
 # --- Routes ---
 @app.route("/")
+@require_api_key
 def serve_index():
     """
     Serves the main HTML page for the log viewer.
@@ -85,15 +140,19 @@ def serve_index():
 def get_pods():
     """
     API endpoint to list pods in the configured Kubernetes namespace.
-    Returns a JSON object with the namespace and a list of pod names.
+    Returns a JSON object with the namespace, a list of pod names, and the current pod name.
     """
-    global KUBE_NAMESPACE  # Use the globally configured namespace
+    global KUBE_NAMESPACE, KUBE_POD_NAME  # Use the globally configured namespace and pod name
     app.logger.info(f"Request for /api/pods in namespace '{KUBE_NAMESPACE}'")
     try:
         pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
         pod_names = [pod.metadata.name for pod in pod_list_response.items]
         app.logger.info(f"Found {len(pod_names)} pods in namespace '{KUBE_NAMESPACE}'.")
-        return jsonify({"namespace": KUBE_NAMESPACE, "pods": pod_names})
+        return jsonify({
+            "namespace": KUBE_NAMESPACE,
+            "pods": pod_names,
+            "current_pod": KUBE_POD_NAME
+        })
     except ApiException as e:
         app.logger.error(
             f"Kubernetes API error fetching pods: {e.status} - {e.reason} - {e.body}"
