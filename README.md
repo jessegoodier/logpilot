@@ -1,16 +1,15 @@
-# Kube Web Log Viewer
+# Kube Web Log Viewer<!-- omit in toc -->
 
-A simple Kubernetes log viewer web app built with Flask and the Kubernetes Python client. View logs from pods in your cluster with a modern web UI.
+A simple Kubernetes log viewer web app. View logs from pods in your cluster with a simple web UI.
+
 ![screenshot](kube-web-log-viewer.png)
 
-## Table of Contents
+## Table of Contents<!-- omit in toc -->
 
-- [Kube Log Viewer](#kube-log-viewer)
-  - [Table of Contents](#table-of-contents)
-  - [Features](#features)
-  - [Requirements](#requirements)
-  - [Docker Build \& Push](#docker-build--push)
-  - [Quick Start](#quick-start)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Deploying](#deploying)
+- [Contributing](#contributing)
 
 ## Features
 
@@ -22,8 +21,6 @@ A simple Kubernetes log viewer web app built with Flask and the Kubernetes Pytho
 - Light/dark theme toggle
 - Tailwind CSS for styling
 - Modern web UI
-- Kubernetes client for fetching logs
-- Gunicorn for production deployment
 - Flask for web server
 
 ## Requirements
@@ -31,14 +28,10 @@ A simple Kubernetes log viewer web app built with Flask and the Kubernetes Pytho
 - Python 3.13+
 - [Flask](https://flask.palletsprojects.com/)
 - [kubernetes](https://github.com/kubernetes-client/python)
-- [gunicorn](https://gunicorn.org/) (for production)
-- Access to a Kubernetes cluster (via kubeconfig or in-cluster)
 
+## Deploying
 
-## Quick Start
-
-1. Modify [the app config](log-viewer.yaml)
-1.1. See comments on the API key usage
+1. Modify [the app config](log-viewer.yaml). See comments on the API key usage
 2. Create the configmap:
 
     ```sh
@@ -56,3 +49,32 @@ A simple Kubernetes log viewer web app built with Flask and the Kubernetes Pytho
     ```sh
     kubectl port-forward -n YOUR_NAMESPACE svc/svc/kube-log-viewer-service 5001:5001
     ```
+
+The API key is desinged to simply protect the UI from random users. Please use a VPN or other means to protect the app in sensitive environments. Happy to accept PRs to add more security.
+
+When using an API key, you embed the key in the URL. You can access the app at `http://localhost:5001/api_key=your-api-key`
+
+## Contributing
+
+We welcome contributions! Please follow these guidelines when submitting a Pull Request:
+
+1. Fork the repository and create your feature branch (`git checkout -b feature/amazing-feature`)
+2. Make your changes
+3. Run code formatting and linting:
+   ```sh
+   # Format code with black
+   uvx black .
+   # Run ruff linter
+   uvx ruff check --fix .
+   ```
+4. Commit your changes with a descriptive commit message
+5. Push to your branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+Pull Request Guidelines
+
+- Keep PRs focused and small when possible
+- Update documentation for any new features
+- Follow the existing code style
+- Use clear commit messages that describe the changes
+- Reference any related issues in your PR description

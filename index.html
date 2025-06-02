@@ -97,7 +97,7 @@
                 </div>
 
                 <div class="lg:col-span-1 xl:col-span-1">
-                    <label for="searchBox" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Search</label>
+                    <label for="searchBox" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Search <a href="#" id="clearSearch" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Clear)</a></label>
                     <input type="text" id="searchBox" placeholder="Enter to search..." class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                 </div>
 
@@ -133,6 +133,7 @@
             const namespaceValue = document.getElementById('namespaceValue');
             const errorDisplay = document.getElementById('errorDisplay');
             const loadingIndicator = document.getElementById('loadingIndicator');
+            const clearSearch = document.getElementById('clearSearch');
 
             let currentLogs = [];
 
@@ -261,7 +262,7 @@
                         classes: ['text-orange-500', 'dark:text-orange-400']
                     },
                     info: {
-                        terms: ['info', 'notice'],
+                        terms: ['info', 'notice', 'inf'],
                         classes: ['text-green-600', 'dark:text-green-400']
                     }
                 };
@@ -371,6 +372,12 @@
                     event.preventDefault();
                     fetchAndDisplayLogs();
                 }
+            });
+
+            clearSearch.addEventListener('click', (event) => {
+                event.preventDefault();
+                searchBox.value = '';
+                fetchAndDisplayLogs();
             });
 
             // Initial data fetch
