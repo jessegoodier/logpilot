@@ -64,51 +64,62 @@
 
     <div class="container mx-auto px-4 py-4 min-h-screen flex flex-col">
         <header class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 mb-4 sticky top-0 z-10">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end">
-                <div>
+            <div class="relative">
+                <button id="settingsButton" class="absolute top-0 right-0 p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <img src="https://raw.githubusercontent.com/jessegoodier/kube-web-log-viewer/refs/heads/main/settings-gear.png" alt="Settings" class="w-5 h-5">
+                </button>
+                <div id="settingsMenu" class="hidden absolute right-0 mt-2 w-64 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-20">
+                    <div class="py-1" role="menu" aria-orientation="vertical">
+                        <div class="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">Settings</h3>
+                        </div>
+
+                        <div class="px-4 py-2">
+                            <label for="themeToggle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Theme</label>
+                            <button id="themeToggle" class="w-full py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600">
+                                Toggle Light/Dark
+                            </button>
+                        </div>
+
+                        <div class="px-4 py-2">
+                            <label for="sortOrder" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sort Order</label>
+                            <select id="sortOrder" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="desc">Newest First</option>
+                                <option value="asc">Oldest First</option>
+                            </select>
+                        </div>
+
+                        <div class="px-4 py-2">
+                            <label for="numLines" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Lines per Page</label>
+                            <select id="numLines" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="100">Last 100</option>
+                                <option value="1000">Last 1000</option>
+                                <option value="0">All</option>
+                            </select>
+                        </div>
+
+                        <div class="px-4 py-2">
+                            <label for="timestampType" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Timestamp Format</label>
+                            <select id="timestampType" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="since">Time Since</option>
+                                <option value="utc">UTC</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end mt-2">
+                <div class="sm:col-span-2">
                     <label for="podSelector" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Pod <a href="#" id="refreshPods" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Refresh)</a></label>
                     <select id="podSelector" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                         <option value="all">All Pods</option>
                     </select>
                 </div>
 
-                <div>
-                    <label for="sortOrder" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Order</label>
-                    <select id="sortOrder" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="desc">Newest First</option>
-                        <option value="asc">Oldest First</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label for="numLines" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Lines</label>
-                    <select id="numLines" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="100">Last 100</option>
-                        <option value="1000">Last 1000</option>
-                        <option value="0">All</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label for="timestampType" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Timestamp</label>
-                    <select id="timestampType" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="since">Time Since</option>
-                        <option value="utc">UTC</option>
-                    </select>
-                </div>
-
-                <div class="lg:col-span-1 xl:col-span-1">
+                <div class="sm:col-span-2">
                     <label for="searchBox" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Search <a href="#" id="clearSearch" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Clear)</a></label>
                     <input type="text" id="searchBox" placeholder="Enter to search..." class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                </div>
-
-                <div>
-                    <label for="themeToggle" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Options</label>
-                    <div class="flex gap-2">
-                        <button id="themeToggle" class="flex-1 py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600">
-                            Toggle Light/Dark
-                        </button>
-                    </div>
                 </div>
             </div>
             <div id="namespaceDisplay" class="mt-3 text-xs text-gray-500 dark:text-gray-400">Namespace: <span id="namespaceValue">Loading...</span></div>
@@ -138,6 +149,8 @@
             const loadingIndicator = document.getElementById('loadingIndicator');
             const clearSearch = document.getElementById('clearSearch');
             const refreshPods = document.getElementById('refreshPods');
+            const settingsButton = document.getElementById('settingsButton');
+            const settingsMenu = document.getElementById('settingsMenu');
 
             let currentLogs = [];
 
@@ -509,6 +522,24 @@
                 fetchPods().finally(() => {
                     loadingIndicator.classList.add('hidden');
                 });
+            });
+
+            // Settings menu toggle
+            settingsButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                settingsMenu.classList.toggle('hidden');
+            });
+
+            // Close settings menu when clicking outside
+            document.addEventListener('click', (event) => {
+                if (!settingsMenu.contains(event.target) && !settingsButton.contains(event.target)) {
+                    settingsMenu.classList.add('hidden');
+                }
+            });
+
+            // Prevent menu from closing when clicking inside it
+            settingsMenu.addEventListener('click', (event) => {
+                event.stopPropagation();
             });
 
             // Initial data fetch

@@ -21,19 +21,18 @@ def are_all_pods_ready():
 
     if not pods.items:
         return "No pods found"
-    all_ready = True
     for pod in pods.items:
+        if pod.status.phase != "Running":
+            return f"Pod {pod.metadata.name} is not in Running state"
         container_statuses = pod.status.container_statuses
         for container in container_statuses:
-            print(f"{container.name} is: {container.ready}")
-
             if not container.ready:
-                print(f"this should make the loop continue. Setting all_ready to False")
-                all_ready = False
-    if all_ready:
-        return "G2G"
-    else:
-        return "Not all pods are ready"
+                return f"Container {container.name} in pod {pod.metadata.name} is not ready"
+            if container.state.waiting:
+                return f"Container {container.name} in pod {pod.metadata.name} is waiting"
+            if container.state.terminated:
+                return f"Container {container.name} in pod {pod.metadata.name} is terminated"
+    return "G2G"
 
 def wait_for_pods():
     """Wait for all pods to be ready."""
