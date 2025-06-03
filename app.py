@@ -11,6 +11,8 @@ from flask import (
 )
 import json
 import threading  # Added for log archival watcher
+import queue # Added for multi-threaded log streaming for 'all pods'
+import time # Added for polling queue in 'all pods' streaming
 
 # --- Log Archiver Imports ---
 from log_archiver import start_log_cleanup_job, watch_pods_and_archive
@@ -213,177 +215,235 @@ def get_pods():
 @app.route("/api/logs", methods=["GET"])
 def get_logs():
     """
-    API endpoint to fetch logs for a specific pod.
+    API endpoint to fetch logs for a specific pod or all pods.
     Query Parameters:
-        - pod_name (required): The name of the pod.
+        - pod_name (required): The name of the pod or 'all' for all pods.
         - sort_order (optional, default 'desc'): 'asc' (oldest first) or 'desc' (newest first).
         - tail_lines (optional, default '100'): Number of lines to fetch. '0' means all lines.
         - search_string (optional): String to filter log messages by (case-insensitive).
         - follow (optional): If true, stream logs in real-time.
-    Returns a JSON object with a list of log entries, each with 'timestamp' and 'message'.
+    Returns a JSON object with a list of log entries, each with 'timestamp', 'message', and 'pod_name' (if 'all').
     """
-    global KUBE_NAMESPACE
-    pod_name = request.args.get("pod_name")
+    global KUBE_NAMESPACE, v1 # Ensure v1 is accessible
+    pod_name_req = request.args.get("pod_name")
     sort_order = request.args.get("sort_order", "desc").lower()
     tail_lines_str = request.args.get("tail_lines", "100")
     search_string = request.args.get("search_string", "").strip().lower()
     follow = request.args.get("follow", "false").lower() == "true"
 
     app.logger.info(
-        f"Request for /api/logs: pod='{pod_name}', sort='{sort_order}', lines='{tail_lines_str}', search='{search_string}', follow='{follow}'"
+        f"Request for /api/logs: pod='{pod_name_req}', sort='{sort_order}', lines='{tail_lines_str}', search='{search_string}', follow='{follow}'"
     )
 
-    if not pod_name:
+    if not pod_name_req:
         app.logger.warning("Bad request to /api/logs: pod_name missing.")
         return jsonify({"message": "Pod name is required"}), 400
 
     try:
-        # tail_lines = None means all lines. Otherwise, convert to int.
         tail_lines = int(tail_lines_str) if tail_lines_str != "0" else None
         if tail_lines is not None and tail_lines < 0:
-            app.logger.warning(
-                f"Bad request to /api/logs: invalid tail_lines value {tail_lines_str}."
-            )
-            return (
-                jsonify(
-                    {
-                        "message": "tail_lines must be a non-negative integer or 0 for all."
-                    }
-                ),
-                400,
-            )
+            return jsonify({"message": "tail_lines must be non-negative or 0."}), 400
     except ValueError:
-        app.logger.warning(
-            f"Bad request to /api/logs: invalid tail_lines value {tail_lines_str}."
-        )
-        return (
-            jsonify({"message": "Invalid number for tail_lines. Must be an integer."}),
-            400,
-        )
+        return jsonify({"message": "Invalid number for tail_lines."}), 400
 
     try:
-        # Fetch logs from Kubernetes API.
-        # `timestamps=True` adds timestamps to each log line.
-        # `_preload_content=False` allows streaming, but here we'll read all then process.
-        # If `tail_lines` is set, K8s API typically returns newest lines first.
-        # If `tail_lines` is None (all logs), K8s API typically returns oldest lines first.
-        log_data_stream = v1.read_namespaced_pod_log(
-            name=pod_name,
-            namespace=KUBE_NAMESPACE,
-            timestamps=True,
-            tail_lines=tail_lines,  # Pass None to get all lines
-            follow=follow,  # Enable following logs if requested
-            _preload_content=not follow,  # Set to False for streaming when following
-        )
+        if pod_name_req == 'all':
+            pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
+            pod_names = [pod.metadata.name for pod in pod_list_response.items]
 
-        if follow:
+            if not pod_names:
+                return jsonify({"logs": [], "message": "No pods found in the namespace."})
 
-            def generate():
-                try:
-                    for line in log_data_stream:
-                        if not line:  # Skip empty lines
-                            continue
 
-                        # Decode bytes to string if needed
-                        if isinstance(line, bytes):
-                            line = line.decode("utf-8")
+            if follow:
+                log_q = queue.Queue()
+                threads = []
 
-                        log_entry = parse_log_line(line)
+                def stream_pod_logs_worker(p_name, current_q):
+                    try:
+                        app.logger.info(f"Starting log stream for pod: {p_name} with tail_lines: {tail_lines}")
+                        log_stream_k8s = v1.read_namespaced_pod_log(
+                            name=p_name,
+                            namespace=KUBE_NAMESPACE,
+                            timestamps=True,
+                            tail_lines=tail_lines, # K8s API handles "last N then follow"
+                            follow=True,
+                            _preload_content=False
+                        )
+                        for log_line_bytes in log_stream_k8s:
+                            if not log_line_bytes:
+                                continue
 
-                        # Apply search filter (case-insensitive)
-                        if (
-                            search_string
-                            and search_string not in log_entry["message"].lower()
-                        ):
-                            continue  # Skip if search string not found
+                            log_line_str = log_line_bytes.decode("utf-8", errors="replace")
+                            log_entry = parse_log_line(log_line_str)
 
-                        # Send each log entry as a Server-Sent Event
-                        yield f"data: {json.dumps(log_entry)}\n\n"
-                except Exception as e:
-                    app.logger.error(f"Error in log stream: {str(e)}")
-                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                            if search_string and search_string not in log_entry["message"].lower():
+                                continue
 
-            return app.response_class(
-                generate(),
-                mimetype="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",  # Disable nginx buffering
-                },
+                            log_entry['pod_name'] = p_name
+                            current_q.put(log_entry)
+                    except ApiException as e:
+                        app.logger.error(f"API error streaming logs for pod {p_name}: {e.status} - {e.reason}")
+                        current_q.put({"pod_name": p_name, "error": f"API Error: {e.reason}", "message": f"Failed to stream logs for {p_name}."})
+                    except Exception as e:
+                        app.logger.error(f"Generic error in log streaming thread for {p_name}: {str(e)}", exc_info=True)
+                        current_q.put({"pod_name": p_name, "error": "Streaming Error", "message": f"Unexpected error streaming logs for {p_name}."})
+                    finally:
+                        app.logger.info(f"Log stream worker finished for pod: {p_name}")
+                        current_q.put(None) # Signal completion for this pod's stream
+
+                for p_n_item in pod_names:
+                    thread = threading.Thread(target=stream_pod_logs_worker, args=(p_n_item, log_q))
+                    thread.daemon = True
+                    threads.append(thread)
+                    thread.start()
+
+                def generate_combined_logs_sse():
+                    active_streams = len(pod_names)
+                    app.logger.info(f"Starting SSE generator for {active_streams} pods")
+                    try:
+                        while active_streams > 0:
+                            try:
+                                log_item = log_q.get(timeout=0.5) # Timeout to prevent indefinite block and allow checking active_streams
+                                if log_item is None:
+                                    active_streams -= 1
+                                    app.logger.info(f"Pod stream completed. {active_streams} streams remaining")
+                                    continue
+                                app.logger.debug(f"Sending log item: {log_item}")
+                                yield f"data: {json.dumps(log_item)}\n\n"  # Added double newline for proper SSE format
+                            except queue.Empty:
+                                if not any(t.is_alive() for t in threads) and log_q.empty(): # All threads done and queue empty
+                                    app.logger.info("All log streaming threads finished and queue is empty.")
+                                    break
+                                continue # Continue to next get() attempt or loop exit
+                        app.logger.info("Exiting SSE generator for all pods.")
+                    except GeneratorExit:
+                        app.logger.info("Client disconnected from all pods log stream.")
+                    except Exception as e:
+                        app.logger.error(f"Error in SSE generator for all pods: {str(e)}", exc_info=True)
+                        yield f"data: {json.dumps({'error': 'Error in log stream generator', 'message': str(e)})}\n\n"
+                    finally:
+                        # Attempt to join threads, though daemon threads should exit with app
+                        for t in threads:
+                            if t.is_alive():
+                                app.logger.debug(f"Thread for {t.name} still alive at generator exit.")
+                                # Threads are daemon, so they will be cleaned up.
+                                # Explicit join might hang if a stream is stuck.
+                        app.logger.info("SSE generator for all pods has been closed.")
+
+
+                return app.response_class(
+                    generate_combined_logs_sse(),
+                    mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+                )
+            else: # Not following, all pods
+                all_logs = []
+                for p_name_item in pod_names:
+                    try:
+                        log_data_stream = v1.read_namespaced_pod_log(
+                            name=p_name_item,
+                            namespace=KUBE_NAMESPACE,
+                            timestamps=True,
+                            tail_lines=tail_lines,
+                            follow=False,
+                        )
+                        raw_log_lines = log_data_stream.splitlines()
+                        for line_str in raw_log_lines:
+                            if not line_str:
+                                continue
+                            log_entry = parse_log_line(line_str)
+                            if search_string and search_string not in log_entry["message"].lower():
+                                continue
+                            log_entry['pod_name'] = p_name_item
+                            all_logs.append(log_entry)
+                    except ApiException as e:
+                        app.logger.warning(f"Could not fetch logs for pod {p_name_item} (non-follow): {e.status} - {e.reason}")
+                        all_logs.append({"pod_name": p_name_item, "timestamp": None, "message": f"Error fetching logs: {e.reason}", "error": True})
+
+                # Sort all collected logs by timestamp
+                # If timestamp is None, treat it as very old for sorting purposes or handle as per desired logic
+                all_logs.sort(key=lambda x: x.get('timestamp') or "0000-00-00T00:00:00Z", reverse=(sort_order == 'asc'))
+
+                if tail_lines is not None and tail_lines > 0: # tail_lines applies after sorting for 'all non-follow'
+                    all_logs = all_logs[:tail_lines]
+
+                return jsonify({"logs": all_logs})
+        else: # Single pod
+            log_data_stream = v1.read_namespaced_pod_log(
+                name=pod_name_req,
+                namespace=KUBE_NAMESPACE,
+                timestamps=True,
+                tail_lines=tail_lines,
+                follow=follow,
+                _preload_content=not follow,
             )
-        else:
-            raw_log_lines = log_data_stream.splitlines()
-            app.logger.info(
-                f"Fetched {len(raw_log_lines)} raw lines for pod '{pod_name}'."
-            )
 
-            processed_logs = []
-            for line_str in raw_log_lines:
-                if not line_str:  # Skip empty lines
-                    continue
+            if follow:
+                def generate_single_pod_sse():
+                    try:
+                        for log_line_bytes in log_data_stream:
+                            if not log_line_bytes:
+                                continue
+                            log_line_str = log_line_bytes.decode("utf-8", errors="replace")
+                            log_entry = parse_log_line(log_line_str)
+                            if search_string and search_string not in log_entry["message"].lower():
+                                continue
+                            yield f"data: {json.dumps(log_entry)}"
+                    except Exception as e:
+                        app.logger.error(f"Error in single pod log stream for {pod_name_req}: {str(e)}", exc_info=True)
+                        yield f"data: {json.dumps({'error': str(e), 'message': 'Error streaming logs.'})}"
+                    finally:
+                        app.logger.info(f"SSE generator for single pod {pod_name_req} closed.")
+                return app.response_class(
+                    generate_single_pod_sse(),
+                    mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+                )
+            else: # Single pod, not following
+                raw_log_lines = log_data_stream.splitlines()
+                processed_logs = []
+                for line_str in raw_log_lines:
+                    if not line_str:
+                        continue
+                    log_entry = parse_log_line(line_str)
+                    if search_string and search_string not in log_entry["message"].lower():
+                        continue
+                    processed_logs.append(log_entry)
 
-                log_entry = parse_log_line(line_str)
+                # Sort single pod logs (non-follow)
+                # K8s behavior:
+                # - tail_lines specified: returns newest N, typically newest-first.
+                # - tail_lines None: returns all, typically oldest-first.
+                if tail_lines is not None:  # K8s gave newest N, newest-first
+                    if sort_order == "asc": # User wants oldest-first from these N
+                        processed_logs.reverse()
+                else:  # All logs, K8s gave oldest-first
+                    if sort_order == "desc": # User wants newest-first from all
+                        processed_logs.reverse()
 
-                # Apply search filter (case-insensitive)
-                if search_string and search_string not in log_entry["message"].lower():
-                    continue  # Skip if search string not found
-
-                processed_logs.append(log_entry)
-
-            app.logger.info(
-                f"{len(processed_logs)} lines after search filter for pod '{pod_name}'."
-            )
-
-            # Sorting logic:
-            # Kubernetes API behavior:
-            # - If `tail_lines` is specified, it returns the last N lines (newest first).
-            # - If `tail_lines` is None (all logs), it returns logs oldest first.
-
-            # Default order from K8s if tail_lines is used: newest first (desc)
-            # Default order from K8s if tail_lines is NOT used (all): oldest first (asc)
-
-            if (
-                tail_lines is not None
-            ):  # Last N lines were requested (K8s returned newest first)
-                if sort_order == "asc":
-                    processed_logs.reverse()  # Reverse to get oldest of the N lines first
-            else:  # All logs were requested (K8s returned oldest first)
-                if sort_order == "desc":
-                    processed_logs.reverse()  # Reverse to get newest first
-
-            return jsonify({"logs": processed_logs})
+                # tail_lines for single pod, non-follow is handled by K8s API call directly.
+                # The sorting above ensures the order of these lines is correct.
+                return jsonify({"logs": processed_logs})
 
     except ApiException as e:
         app.logger.error(
-            f"Kubernetes API error fetching logs for pod '{pod_name}': {e.status} - {e.reason} - {e.body}"
+            f"Kubernetes API error processing logs for '{pod_name_req}': {e.status} - {e.reason} - {e.body}"
         )
         error_message = e.reason
         if e.body:
             try:
                 error_details = json.loads(e.body)
                 error_message = error_details.get("message", e.reason)
-            except json.JSONDecodeError:
-                error_message = f"{e.reason} (Details: {e.body[:200]})"  # Show first 200 chars if not JSON
-        return (
-            jsonify(
-                {"message": f"Error fetching logs for pod {pod_name}: {error_message}"}
-            ),
-            e.status,
-        )
+            except json.JSONDecodeError: # pragma: no cover
+                error_message = f"{e.reason} (Details: {e.body[:200]})"
+        return jsonify({"message": f"Error fetching logs: {error_message}"}), e.status
     except Exception as e:
         app.logger.error(
-            f"Unexpected error fetching logs for pod '{pod_name}': {str(e)}",
+            f"Unexpected error processing logs for '{pod_name_req}': {str(e)}",
             exc_info=True,
         )
-        return (
-            jsonify(
-                {
-                    "message": f"An unexpected error occurred while fetching logs: {str(e)}"
-                }
-            ),
-            500,
-        )
+        return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
 
 
 @app.route("/api/archived_pods", methods=["GET"])

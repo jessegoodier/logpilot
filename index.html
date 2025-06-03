@@ -68,7 +68,7 @@
                 <div>
                     <label for="podSelector" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Pod <a href="#" id="refreshPods" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Refresh)</a></label>
                     <select id="podSelector" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="">Please select a pod</option>
+                        <option value="all">All Pods</option>
                     </select>
                 </div>
 
@@ -205,7 +205,7 @@
                         // Do not display error for this, as it might be an expected state
                     }
 
-                    podSelector.innerHTML = '<option value="">Please select a pod</option>';
+                    podSelector.innerHTML = '<option value="all">All Pods</option>';
 
                     const createOption = (value, text, isArchived = false) => {
                         const option = document.createElement('option');
@@ -248,29 +248,17 @@
                     }
 
                     if (!hasLivePods && !hasArchivedPods) {
-                        podSelector.innerHTML = '<option value="">No pods or archived logs found</option>';
-                    } else {
-                         // Auto-selection logic (slightly adjusted)
-                        if (livePodsData.pods && livePodsData.pods.length === 2 && livePodsData.current_pod && livePodsData.current_pod !== "NOT-SET") {
-                            const otherPod = livePodsData.pods.find(pod => pod !== livePodsData.current_pod);
-                            if (otherPod) {
-                                podSelector.value = otherPod; // This will be the non-prefixed value
-                                fetchAndDisplayLogs();
-                            }
-                        } else if (livePodsData.pods && livePodsData.pods.length === 1) {
-                            podSelector.value = livePodsData.pods[0];
-                            fetchAndDisplayLogs();
-                        } else if (!hasLivePods && hasArchivedPods && archivedPodsData.archived_pods.length > 0) {
-                            // If no live pods, but archived logs exist, select the first archived log
-                            // podSelector.value = `archived:${archivedPodsData.archived_pods[0]}`;
-                            // fetchAndDisplayLogs(); // Decided against auto-selecting archived to avoid confusion
-                        }
+                        podSelector.innerHTML = '<option value="all">No pods or archived logs found</option>';
                     }
+
+                    // Select "All Pods" by default
+                    podSelector.value = "all";
+                    fetchAndDisplayLogs();
                 } catch (error) {
                     // This catch is mainly for errors from /api/pods now
                     namespaceValue.textContent = 'Error loading';
                     errorDisplay.textContent = `Error fetching pod list: ${error.message}`;
-                    podSelector.innerHTML = '<option value="">Error loading pods</option>';
+                    podSelector.innerHTML = '<option value="all">Error loading pods</option>';
                 }
             }
 
@@ -324,24 +312,44 @@
 
                 try {
                     if (!isArchivedLog && isFollowing) {
-                        // Use Server-Sent Events for following live logs
+                        // First, fetch initial logs without follow
+                        const initialParams = new URLSearchParams(params);
+                        initialParams.delete('follow');
+                        const initialData = await fetchFromServer(`${apiEndpoint}?${initialParams.toString()}`);
+                        currentLogs = initialData.logs || [];
+                        renderLogs();
+
+                        // Then set up SSE for following
                         eventSource = new EventSource(`${apiEndpoint}?${params.toString()}`);
 
                         eventSource.onmessage = (event) => {
                             try {
+                                console.log('Received SSE message:', event.data);
                                 const logEntry = JSON.parse(event.data);
                                 if (logEntry.error) {
+                                    console.error('Log entry contains error:', logEntry.error);
                                     errorDisplay.textContent = `Error: ${logEntry.error}`;
                                     eventSource.close();
                                     return;
                                 }
-                                currentLogs.unshift(logEntry);
-                                if (currentLogs.length > 1000) { // Keep only last 1000 for performance
-                                    currentLogs = currentLogs.slice(0, 1000);
+                                console.log('Parsed log entry:', logEntry);
+                                // For all pods view, append logs to maintain correct order
+                                if (podSelector.value === 'all') {
+                                    currentLogs.push(logEntry);
+                                    console.log('Added log to currentLogs (all pods). Current length:', currentLogs.length);
+                                } else {
+                                    currentLogs.unshift(logEntry);
+                                    console.log('Added log to currentLogs (single pod). Current length:', currentLogs.length);
                                 }
+                                if (currentLogs.length > 1000) { // Keep only last 1000 for performance
+                                    currentLogs = currentLogs.slice(-1000);
+                                    console.log('Trimmed logs to 1000 entries');
+                                }
+                                console.log('Calling renderLogs');
                                 renderLogs();
                             } catch (error) {
-                                console.error('Error parsing log entry:', error);
+                                console.error('Error in SSE message handler:', error);
+                                errorDisplay.textContent = `Error processing log entry: ${error.message}`;
                             }
                         };
 
@@ -355,15 +363,27 @@
                             followToggle.classList.remove('bg-green-500', 'hover:bg-green-600', 'focus:ring-green-500');
                             followToggle.classList.add('bg-gray-500', 'hover:bg-gray-600', 'focus:ring-gray-500');
                         };
+
+                        eventSource.onopen = () => {
+                            console.log('SSE connection opened');
+                        };
                     } else {
                         // Regular fetch for non-following mode (live or archived)
+                        console.log('Fetching logs with params:', params.toString());
                         const data = await fetchFromServer(`${apiEndpoint}?${params.toString()}`);
-                        currentLogs = data.logs || [];
+                        console.log('Received log data:', data);
+                        if (!data.logs) {
+                            console.error('No logs array in response:', data);
+                            throw new Error('Invalid response format: missing logs array');
+                        }
+                        currentLogs = data.logs;
+                        console.log('Setting currentLogs, length:', currentLogs.length);
                         renderLogs();
                     }
                 } catch (error) {
+                    console.error('Error in fetchAndDisplayLogs:', error);
                     currentLogs = [];
-                    // Error is already displayed by fetchFromServer, but ensure logs are cleared
+                    errorDisplay.textContent = `Error loading logs: ${error.message}`;
                     logOutput.textContent = 'Error loading logs. Check console for details.';
                 } finally {
                     loadingIndicator.classList.add('hidden');
@@ -372,7 +392,14 @@
 
             // --- Log Rendering ---
             function renderLogs() {
+                console.log('Starting renderLogs, currentLogs length:', currentLogs.length);
                 logOutput.innerHTML = '';
+
+                if (!Array.isArray(currentLogs)) {
+                    console.error('currentLogs is not an array:', currentLogs);
+                    errorDisplay.textContent = 'Error: Invalid log data format';
+                    return;
+                }
 
                 if (currentLogs.length === 0) {
                     logOutput.textContent = 'No logs to display for the current selection.';
@@ -384,6 +411,24 @@
 
                 const fragment = document.createDocumentFragment();
                 const searchTerm = searchBox.value.trim(); // For search highlighting
+
+                // Define pod colors - using a mix of colors that work well in both light and dark modes
+                const podColors = [
+                    ['text-blue-600', 'dark:text-blue-400'],
+                    ['text-purple-600', 'dark:text-purple-400'],
+                    ['text-cyan-600', 'dark:text-cyan-400'],
+                    ['text-emerald-600', 'dark:text-emerald-400'],
+                    ['text-amber-600', 'dark:text-amber-400'],
+                    ['text-rose-600', 'dark:text-rose-400'],
+                    ['text-violet-600', 'dark:text-violet-400'],
+                    ['text-teal-600', 'dark:text-teal-400'],
+                    ['text-orange-600', 'dark:text-orange-400'],
+                    ['text-pink-600', 'dark:text-pink-400']
+                ];
+
+                // Create a map to assign consistent colors to pods
+                const podColorMap = new Map();
+                let colorIndex = 0;
 
                 const logColoringRules = {
                     error: {
@@ -403,6 +448,20 @@
                 currentLogs.forEach(logEntry => {
                     const lineDiv = document.createElement('div');
                     lineDiv.classList.add('log-line', 'py-0.5');
+
+                    // Assign color to pod if viewing all pods
+                    if (podSelector.value === 'all' && logEntry.pod_name) {
+                        if (!podColorMap.has(logEntry.pod_name)) {
+                            podColorMap.set(logEntry.pod_name, podColors[colorIndex % podColors.length]);
+                            colorIndex++;
+                        }
+                        const podColor = podColorMap.get(logEntry.pod_name);
+
+                        const podSpan = document.createElement('span');
+                        podSpan.classList.add('mr-3', 'font-medium', ...podColor);
+                        podSpan.textContent = `[${logEntry.pod_name}] `;
+                        lineDiv.appendChild(podSpan);
+                    }
 
                     const timestampSpan = document.createElement('span');
                     timestampSpan.classList.add('mr-3', 'text-gray-500', 'dark:text-gray-400', 'select-none');
@@ -433,26 +492,18 @@
 
                     // Apply search highlighting on the potentially colorized message
                     if (searchTerm) {
-                        // Need to be careful if search term overlaps with colored spans.
-                        // For simplicity, this will highlight search term even if it's inside a colored span's text.
-                        // A more complex solution would involve parsing HTML, but this is usually acceptable.
                         const searchRegex = new RegExp(`(${escapeRegExp(searchTerm)})`, 'gi');
-
-                        // Avoid re-marking already marked search terms if coloring added marks
-                        // This simple replace should work fine as long as coloring doesn't add <mark>
                         coloredMessageContent = coloredMessageContent.replace(searchRegex, (match, p1) => {
-                            // Check if we are inside an HTML tag already (simple check)
-                            // This is a heuristic and might not cover all edge cases of nested HTML.
                             const tempDiv = document.createElement('div');
                             tempDiv.innerHTML = coloredMessageContent;
-                            if (tempDiv.textContent.includes(match)) { // if match is not part of HTML tag itself
+                            if (tempDiv.textContent.includes(match)) {
                                 return `<mark>${p1}</mark>`;
                             }
-                            return match; // if it's part of a tag, don't mark it
+                            return match;
                         });
                     }
 
-                    messageSpan.innerHTML = coloredMessageContent; // Use innerHTML for colored spans and <mark>
+                    messageSpan.innerHTML = coloredMessageContent;
 
                     lineDiv.appendChild(timestampSpan);
                     lineDiv.appendChild(messageSpan);
