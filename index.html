@@ -105,6 +105,15 @@
                                 <option value="utc">UTC</option>
                             </select>
                         </div>
+
+                        <div class="px-4 py-2">
+                            <div class="flex items-center">
+                                <input type="checkbox" id="excludeSelf" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" checked>
+                                <label for="excludeSelf" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                                    Exclude Self
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -151,8 +160,10 @@
             const refreshPods = document.getElementById('refreshPods');
             const settingsButton = document.getElementById('settingsButton');
             const settingsMenu = document.getElementById('settingsMenu');
+            const excludeSelf = document.getElementById('excludeSelf');
 
             let currentLogs = [];
+            let currentPodName = null; // Add this to track the current pod name
 
             // --- Theme Toggle ---
             const applyTheme = () => {
@@ -206,6 +217,7 @@
                     // Fetch live pods
                     const livePodsData = await fetchFromServer('/api/pods');
                     namespaceValue.textContent = livePodsData.namespace || 'N/A';
+                    currentPodName = livePodsData.pod_name || null; // Store the current pod name
 
                     // Fetch archived pods
                     let archivedPodsData = { archived_pods: [] }; // Default empty
@@ -234,9 +246,28 @@
                         hasLivePods = true;
                         const liveGroup = document.createElement('optgroup');
                         liveGroup.label = "Live Pods";
-                        livePodsData.pods.forEach(podName => {
+
+                        // Create a Set of all pods to ensure uniqueness
+                        const podSet = new Set(livePodsData.pods);
+
+                        // If excludeSelf is unchecked and we have a current pod, add it to the set
+                        if (!excludeSelf.checked && currentPodName) {
+                            podSet.add(currentPodName);
+                        }
+
+                        // Convert Set back to array and sort
+                        const allPods = Array.from(podSet).sort();
+
+                        allPods.forEach(podName => {
                             liveGroup.appendChild(createOption(podName, podName));
                         });
+                        podSelector.appendChild(liveGroup);
+                    } else if (!excludeSelf.checked && currentPodName) {
+                        // If no pods from API but we have a current pod and excludeSelf is unchecked
+                        hasLivePods = true;
+                        const liveGroup = document.createElement('optgroup');
+                        liveGroup.label = "Live Pods";
+                        liveGroup.appendChild(createOption(currentPodName, currentPodName));
                         podSelector.appendChild(liveGroup);
                     }
 
@@ -313,6 +344,11 @@
                     tail_lines: numLines.value,
                     search_string: searchBox.value.trim(),
                 });
+
+                // Add exclude_self parameter if needed
+                if (excludeSelf.checked && currentPodName) {
+                    params.append('exclude_self', currentPodName);
+                }
 
                 const apiEndpoint = isArchivedLog ? '/api/archived_logs' : '/api/logs';
 
@@ -541,6 +577,9 @@
             settingsMenu.addEventListener('click', (event) => {
                 event.stopPropagation();
             });
+
+            // Add event listener for excludeSelf checkbox
+            excludeSelf.addEventListener('change', fetchAndDisplayLogs);
 
             // Initial data fetch
             fetchPods();

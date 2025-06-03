@@ -22,6 +22,9 @@ def are_all_pods_ready():
     if not pods.items:
         return "No pods found"
     for pod in pods.items:
+        # Check if pod is terminating
+        if pod.metadata.deletion_timestamp is not None:
+            return f"Pod {pod.metadata.name} is terminating"
         if pod.status.phase != "Running":
             return f"Pod {pod.metadata.name} is not in Running state"
         container_statuses = pod.status.container_statuses
@@ -68,7 +71,8 @@ def main():
     time.sleep(4)
     # Wait for pods to be ready
     wait_for_pods()
-
+    print("Waiting for 4 seconds...")
+    time.sleep(4)
     # Start port forwarding
     start_port_forward()
 

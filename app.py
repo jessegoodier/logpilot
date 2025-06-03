@@ -185,14 +185,15 @@ def serve_index():
 def get_pods():
     """
     API endpoint to list pods in the configured Kubernetes namespace.
-    Returns a JSON object with the namespace, a list of pod names, and the current pod name.
+    Returns a JSON object with the namespace, a list of pod names (excluding current pod), and the current pod name.
     """
     global KUBE_NAMESPACE, KUBE_POD_NAME  # Use the globally configured namespace and pod name
     app.logger.info(f"Request for /api/pods in namespace '{KUBE_NAMESPACE}'")
     try:
         pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
-        pod_names = [pod.metadata.name for pod in pod_list_response.items]
-        app.logger.info(f"Found {len(pod_names)} pods in namespace '{KUBE_NAMESPACE}'.")
+        # Filter out the current pod from the list
+        pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
+        app.logger.info(f"Found {len(pod_names)} pods in namespace '{KUBE_NAMESPACE}' (excluding current pod).")
         return jsonify(
             {
                 "namespace": KUBE_NAMESPACE,
