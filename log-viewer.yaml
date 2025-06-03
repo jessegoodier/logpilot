@@ -55,6 +55,8 @@ metadata:
     app: kube-log-viewer
 spec:
   replicas: 1 # Start with one replica
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: kube-log-viewer # Must match labels in the pod template
@@ -114,7 +116,12 @@ spec:
         configMap:
           name: log-viewer
       - name: log-dir
+        # when using emptyDir, the logs are not persisted across pod restarts
         emptyDir: {}
+        # to use a persistent volume, uncomment the following and comment out the emptyDir
+        # persistentVolumeClaim:
+        #   claimName: log-viewer-pvc
+        # storageClassName: standard # if there is no default storage class, you can specify one here
 
 ---
 # --- Service ---
