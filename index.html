@@ -75,8 +75,8 @@
                 <div>
                     <label for="sortOrder" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sort Order</label>
                     <select id="sortOrder" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <option value="asc">Newest First</option>
-                        <option value="desc">Oldest First</option>
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
                     </select>
                 </div>
 
@@ -108,9 +108,6 @@
                         <button id="themeToggle" class="flex-1 py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600">
                             Toggle Light/Dark
                         </button>
-                        <button id="followToggle" class="flex-1 py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gray-500 hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
-                            Follow Off
-                        </button>
                     </div>
                 </div>
             </div>
@@ -141,11 +138,8 @@
             const loadingIndicator = document.getElementById('loadingIndicator');
             const clearSearch = document.getElementById('clearSearch');
             const refreshPods = document.getElementById('refreshPods');
-            const followToggle = document.getElementById('followToggle');
 
             let currentLogs = [];
-            let eventSource = null;
-            let isFollowing = false;
 
             // --- Theme Toggle ---
             const applyTheme = () => {
@@ -191,6 +185,11 @@
 
             async function fetchPods() {
                 try {
+                    // Store current selection before refresh
+                    const currentSelection = podSelector.value;
+                    const currentOption = podSelector.options[podSelector.selectedIndex];
+                    const isCurrentlyArchived = currentOption ? currentOption.dataset.isArchived === "true" : false;
+
                     // Fetch live pods
                     const livePodsData = await fetchFromServer('/api/pods');
                     namespaceValue.textContent = livePodsData.namespace || 'N/A';
@@ -251,8 +250,26 @@
                         podSelector.innerHTML = '<option value="all">No pods or archived logs found</option>';
                     }
 
-                    // Select "All Pods" by default
-                    podSelector.value = "all";
+                    // Try to restore previous selection
+                    if (currentSelection) {
+                        // Check if the previously selected pod still exists
+                        const optionExists = Array.from(podSelector.options).some(option =>
+                            option.value === currentSelection ||
+                            (isCurrentlyArchived && option.value === `archived:${currentSelection}`)
+                        );
+
+                        if (optionExists) {
+                            podSelector.value = currentSelection;
+                        } else {
+                            // If the previously selected pod no longer exists, default to "all"
+                            podSelector.value = "all";
+                        }
+                    } else {
+                        // If there was no previous selection, default to "all"
+                        podSelector.value = "all";
+                    }
+
+                    // Refresh logs for the current selection
                     fetchAndDisplayLogs();
                 } catch (error) {
                     // This catch is mainly for errors from /api/pods now
@@ -274,25 +291,6 @@
                 const isArchivedLog = selectedOption.dataset.isArchived === "true";
                 const actualPodName = isArchivedLog ? selectedValue.substring("archived:".length) : selectedValue;
 
-                // Close any existing event source
-                if (eventSource) {
-                    eventSource.close();
-                    eventSource = null;
-                }
-                // If switching to an archived log or from a live log, ensure follow is off.
-                if (isArchivedLog && isFollowing) {
-                    isFollowing = false;
-                    followToggle.textContent = 'Follow Off';
-                    followToggle.classList.remove('bg-green-500', 'hover:bg-green-600', 'focus:ring-green-500');
-                    followToggle.classList.add('bg-gray-500', 'hover:bg-gray-600', 'focus:ring-gray-500');
-                }
-                followToggle.disabled = isArchivedLog; // Disable follow for archived logs
-                if(isArchivedLog) {
-                     followToggle.classList.add('opacity-50', 'cursor-not-allowed');
-                } else {
-                    followToggle.classList.remove('opacity-50', 'cursor-not-allowed');
-                }
-
                 loadingIndicator.classList.remove('hidden');
                 logOutput.textContent = '';
 
@@ -303,83 +301,20 @@
                     search_string: searchBox.value.trim(),
                 });
 
-                // Only add 'follow' for live logs and if isFollowing is true
-                if (!isArchivedLog && isFollowing) {
-                    params.append('follow', 'true');
-                }
-
                 const apiEndpoint = isArchivedLog ? '/api/archived_logs' : '/api/logs';
 
                 try {
-                    if (!isArchivedLog && isFollowing) {
-                        // First, fetch initial logs without follow
-                        const initialParams = new URLSearchParams(params);
-                        initialParams.delete('follow');
-                        const initialData = await fetchFromServer(`${apiEndpoint}?${initialParams.toString()}`);
-                        currentLogs = initialData.logs || [];
-                        renderLogs();
-
-                        // Then set up SSE for following
-                        eventSource = new EventSource(`${apiEndpoint}?${params.toString()}`);
-
-                        eventSource.onmessage = (event) => {
-                            try {
-                                console.log('Received SSE message:', event.data);
-                                const logEntry = JSON.parse(event.data);
-                                if (logEntry.error) {
-                                    console.error('Log entry contains error:', logEntry.error);
-                                    errorDisplay.textContent = `Error: ${logEntry.error}`;
-                                    eventSource.close();
-                                    return;
-                                }
-                                console.log('Parsed log entry:', logEntry);
-                                // For all pods view, append logs to maintain correct order
-                                if (podSelector.value === 'all') {
-                                    currentLogs.push(logEntry);
-                                    console.log('Added log to currentLogs (all pods). Current length:', currentLogs.length);
-                                } else {
-                                    currentLogs.unshift(logEntry);
-                                    console.log('Added log to currentLogs (single pod). Current length:', currentLogs.length);
-                                }
-                                if (currentLogs.length > 1000) { // Keep only last 1000 for performance
-                                    currentLogs = currentLogs.slice(-1000);
-                                    console.log('Trimmed logs to 1000 entries');
-                                }
-                                console.log('Calling renderLogs');
-                                renderLogs();
-                            } catch (error) {
-                                console.error('Error in SSE message handler:', error);
-                                errorDisplay.textContent = `Error processing log entry: ${error.message}`;
-                            }
-                        };
-
-                        eventSource.onerror = (error) => {
-                            console.error('EventSource error:', error);
-                            errorDisplay.textContent = 'Error: Lost connection to log stream';
-                            eventSource.close();
-                            eventSource = null;
-                            isFollowing = false; // Reset follow state
-                            followToggle.textContent = 'Follow Off';
-                            followToggle.classList.remove('bg-green-500', 'hover:bg-green-600', 'focus:ring-green-500');
-                            followToggle.classList.add('bg-gray-500', 'hover:bg-gray-600', 'focus:ring-gray-500');
-                        };
-
-                        eventSource.onopen = () => {
-                            console.log('SSE connection opened');
-                        };
-                    } else {
-                        // Regular fetch for non-following mode (live or archived)
-                        console.log('Fetching logs with params:', params.toString());
-                        const data = await fetchFromServer(`${apiEndpoint}?${params.toString()}`);
-                        console.log('Received log data:', data);
-                        if (!data.logs) {
-                            console.error('No logs array in response:', data);
-                            throw new Error('Invalid response format: missing logs array');
-                        }
-                        currentLogs = data.logs;
-                        console.log('Setting currentLogs, length:', currentLogs.length);
-                        renderLogs();
+                    // Regular fetch for non-following mode (live or archived)
+                    console.log('Fetching logs with params:', params.toString());
+                    const data = await fetchFromServer(`${apiEndpoint}?${params.toString()}`);
+                    console.log('Received log data:', data);
+                    if (!data.logs) {
+                        console.error('No logs array in response:', data);
+                        throw new Error('Invalid response format: missing logs array');
                     }
+                    currentLogs = data.logs;
+                    console.log('Setting currentLogs, length:', currentLogs.length);
+                    renderLogs();
                 } catch (error) {
                     console.error('Error in fetchAndDisplayLogs:', error);
                     currentLogs = [];
@@ -554,19 +489,6 @@
             sortOrder.addEventListener('change', fetchAndDisplayLogs);
             numLines.addEventListener('change', fetchAndDisplayLogs);
             timestampType.addEventListener('change', renderLogs);
-
-            followToggle.addEventListener('click', () => {
-                isFollowing = !isFollowing;
-                followToggle.textContent = isFollowing ? 'Follow On' : 'Follow Off';
-                if (isFollowing) {
-                    followToggle.classList.remove('bg-gray-500', 'hover:bg-gray-600', 'focus:ring-gray-500');
-                    followToggle.classList.add('bg-green-500', 'hover:bg-green-600', 'focus:ring-green-500');
-                } else {
-                    followToggle.classList.remove('bg-green-500', 'hover:bg-green-600', 'focus:ring-green-500');
-                    followToggle.classList.add('bg-gray-500', 'hover:bg-gray-600', 'focus:ring-gray-500');
-                }
-                fetchAndDisplayLogs();
-            });
 
             searchBox.addEventListener('keypress', (event) => {
                 if (event.key === 'Enter') {

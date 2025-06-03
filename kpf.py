@@ -21,18 +21,19 @@ def are_all_pods_ready():
 
     if not pods.items:
         return "No pods found"
-
+    all_ready = True
     for pod in pods.items:
-        print(f"Pod {pod.metadata.name} is {pod.status.phase}")
-        if pod.status.phase != "Running":
-            for container in pod.status.container_statuses:
-                if container.state.waiting:
-                    print(f"Container {container.name} is not running")
-            return f"{len(pod.status.container_statuses)} containers are not running"
-        for container in pod.status.container_statuses:
+        container_statuses = pod.status.container_statuses
+        for container in container_statuses:
+            print(f"{container.name} is: {container.ready}")
+
             if not container.ready:
-                return f"{len(pod.status.container_statuses)} containers are not ready"
-    return "G2G"
+                print(f"this should make the loop continue. Setting all_ready to False")
+                all_ready = False
+    if all_ready:
+        return "G2G"
+    else:
+        return "Not all pods are ready"
 
 def wait_for_pods():
     """Wait for all pods to be ready."""
@@ -40,10 +41,10 @@ def wait_for_pods():
     while True:
         result = are_all_pods_ready()
         if result == "G2G":
-            break
+            print("G2G!!!")
+            return
         print(result)
         time.sleep(2)
-    print("All pods are ready!")
 
 def start_port_forward():
     """Start port forwarding to the kube-log-viewer-service."""
