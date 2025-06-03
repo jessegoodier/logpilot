@@ -23,7 +23,7 @@ metadata:
 rules:
 - apiGroups: [""] # Core API group
   resources: ["pods", "pods/log"] # Allows access to pods and their logs
-  verbs: ["get", "list"] # Allows reading/listing these resources
+  verbs: ["get", "list", "watch"] # Allows reading/listing these resources
 
 ---
 # --- RoleBinding ---
@@ -73,6 +73,10 @@ spec:
         ports:
         - containerPort: 5001
         env:
+        - name: RETAIN_ALL_POD_LOGS
+          value: "true"
+        - name: MAX_LOG_RETENTION_MINUTES
+          value: "10080" # 7 days
         - name: API_KEY
           # if the value is "no-key", the server will not require an api key
           value: "no-key"
@@ -103,10 +107,14 @@ spec:
           mountPath: /app # Change this to where your app expects app.py and index.html
           # If you want to mount as read-only:
           readOnly: true
+        - name: log-dir
+          mountPath: /logs
       volumes:
       - name: log-viewer-config
         configMap:
           name: log-viewer
+      - name: log-dir
+        emptyDir: {}
 
 ---
 # --- Service ---

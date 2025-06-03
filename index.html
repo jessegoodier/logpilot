@@ -191,67 +191,141 @@
 
             async function fetchPods() {
                 try {
-                    const data = await fetchFromServer('/api/pods');
-                    namespaceValue.textContent = data.namespace || 'N/A';
-                    podSelector.innerHTML = '<option value="">Please select a pod</option>';
-                    if (data.pods && data.pods.length > 0) {
-                        data.pods.forEach(podName => {
-                            const option = document.createElement('option');
-                            option.value = podName;
-                            option.textContent = podName;
-                            podSelector.appendChild(option);
-                        });
+                    // Fetch live pods
+                    const livePodsData = await fetchFromServer('/api/pods');
+                    namespaceValue.textContent = livePodsData.namespace || 'N/A';
 
-                        // If there are exactly 2 pods and one is the current pod, select the other one
-                        if (data.pods.length === 2 && data.current_pod && data.current_pod !== "NOT-SET") {
-                            const otherPod = data.pods.find(pod => pod !== data.current_pod);
+                    // Fetch archived pods
+                    let archivedPodsData = { archived_pods: [] }; // Default empty
+                    try {
+                        // This endpoint might not be available or archival might be disabled
+                        archivedPodsData = await fetchFromServer('/api/archived_pods');
+                    } catch (error) {
+                        console.warn("Could not fetch archived pods, possibly disabled:", error.message);
+                        // Do not display error for this, as it might be an expected state
+                    }
+
+                    podSelector.innerHTML = '<option value="">Please select a pod</option>';
+
+                    const createOption = (value, text, isArchived = false) => {
+                        const option = document.createElement('option');
+                        option.value = isArchived ? `archived:${value}` : value;
+                        option.textContent = text;
+                        if (isArchived) {
+                            option.dataset.isArchived = "true";
+                        }
+                        return option;
+                    };
+
+                    let hasLivePods = false;
+                    if (livePodsData.pods && livePodsData.pods.length > 0) {
+                        hasLivePods = true;
+                        const liveGroup = document.createElement('optgroup');
+                        liveGroup.label = "Live Pods";
+                        livePodsData.pods.forEach(podName => {
+                            liveGroup.appendChild(createOption(podName, podName));
+                        });
+                        podSelector.appendChild(liveGroup);
+                    }
+
+                    let hasArchivedPods = false;
+                    if (archivedPodsData.archived_pods && archivedPodsData.archived_pods.length > 0) {
+                        // Filter out archived pods that have matching live pods
+                        const livePodNames = new Set(livePodsData.pods || []);
+                        const filteredArchivedPods = archivedPodsData.archived_pods.filter(
+                            podName => !livePodNames.has(podName)
+                        );
+
+                        if (filteredArchivedPods.length > 0) {
+                            hasArchivedPods = true;
+                            const archivedGroup = document.createElement('optgroup');
+                            archivedGroup.label = "Archived Logs";
+                            filteredArchivedPods.forEach(podName => {
+                                archivedGroup.appendChild(createOption(podName, podName, true));
+                            });
+                            podSelector.appendChild(archivedGroup);
+                        }
+                    }
+
+                    if (!hasLivePods && !hasArchivedPods) {
+                        podSelector.innerHTML = '<option value="">No pods or archived logs found</option>';
+                    } else {
+                         // Auto-selection logic (slightly adjusted)
+                        if (livePodsData.pods && livePodsData.pods.length === 2 && livePodsData.current_pod && livePodsData.current_pod !== "NOT-SET") {
+                            const otherPod = livePodsData.pods.find(pod => pod !== livePodsData.current_pod);
                             if (otherPod) {
-                                podSelector.value = otherPod;
+                                podSelector.value = otherPod; // This will be the non-prefixed value
                                 fetchAndDisplayLogs();
                             }
-                        }
-                        // If there's only one pod, select it
-                        else if (data.pods.length === 1) {
-                            podSelector.value = data.pods[0];
+                        } else if (livePodsData.pods && livePodsData.pods.length === 1) {
+                            podSelector.value = livePodsData.pods[0];
                             fetchAndDisplayLogs();
+                        } else if (!hasLivePods && hasArchivedPods && archivedPodsData.archived_pods.length > 0) {
+                            // If no live pods, but archived logs exist, select the first archived log
+                            // podSelector.value = `archived:${archivedPodsData.archived_pods[0]}`;
+                            // fetchAndDisplayLogs(); // Decided against auto-selecting archived to avoid confusion
                         }
-                    } else {
-                        podSelector.innerHTML = '<option value="">No pods found</option>';
                     }
                 } catch (error) {
+                    // This catch is mainly for errors from /api/pods now
                     namespaceValue.textContent = 'Error loading';
+                    errorDisplay.textContent = `Error fetching pod list: ${error.message}`;
+                    podSelector.innerHTML = '<option value="">Error loading pods</option>';
                 }
             }
 
             async function fetchAndDisplayLogs() {
-                const selectedPod = podSelector.value;
-                if (!selectedPod) {
+                const selectedOption = podSelector.options[podSelector.selectedIndex];
+                if (!selectedOption || !selectedOption.value) {
                     logOutput.textContent = 'Please select a pod to view logs.';
                     currentLogs = [];
                     return;
                 }
+
+                const selectedValue = selectedOption.value;
+                const isArchivedLog = selectedOption.dataset.isArchived === "true";
+                const actualPodName = isArchivedLog ? selectedValue.substring("archived:".length) : selectedValue;
 
                 // Close any existing event source
                 if (eventSource) {
                     eventSource.close();
                     eventSource = null;
                 }
+                // If switching to an archived log or from a live log, ensure follow is off.
+                if (isArchivedLog && isFollowing) {
+                    isFollowing = false;
+                    followToggle.textContent = 'Follow Off';
+                    followToggle.classList.remove('bg-green-500', 'hover:bg-green-600', 'focus:ring-green-500');
+                    followToggle.classList.add('bg-gray-500', 'hover:bg-gray-600', 'focus:ring-gray-500');
+                }
+                followToggle.disabled = isArchivedLog; // Disable follow for archived logs
+                if(isArchivedLog) {
+                     followToggle.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    followToggle.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
 
                 loadingIndicator.classList.remove('hidden');
                 logOutput.textContent = '';
 
                 const params = new URLSearchParams({
-                    pod_name: selectedPod,
-                    sort_order: sortOrder.value,
+                    pod_name: actualPodName,
+                    sort_order: isArchivedLog ? (sortOrder.value === 'asc' ? 'desc' : 'asc') : sortOrder.value,
                     tail_lines: numLines.value,
                     search_string: searchBox.value.trim(),
-                    follow: isFollowing
                 });
 
+                // Only add 'follow' for live logs and if isFollowing is true
+                if (!isArchivedLog && isFollowing) {
+                    params.append('follow', 'true');
+                }
+
+                const apiEndpoint = isArchivedLog ? '/api/archived_logs' : '/api/logs';
+
                 try {
-                    if (isFollowing) {
-                        // Use Server-Sent Events for following logs
-                        eventSource = new EventSource(`/api/logs?${params.toString()}`);
+                    if (!isArchivedLog && isFollowing) {
+                        // Use Server-Sent Events for following live logs
+                        eventSource = new EventSource(`${apiEndpoint}?${params.toString()}`);
 
                         eventSource.onmessage = (event) => {
                             try {
@@ -261,15 +335,10 @@
                                     eventSource.close();
                                     return;
                                 }
-
-                                // Add new log entry to the beginning of the array
                                 currentLogs.unshift(logEntry);
-
-                                // Keep only the last 1000 entries to prevent memory issues
-                                if (currentLogs.length > 1000) {
+                                if (currentLogs.length > 1000) { // Keep only last 1000 for performance
                                     currentLogs = currentLogs.slice(0, 1000);
                                 }
-
                                 renderLogs();
                             } catch (error) {
                                 console.error('Error parsing log entry:', error);
@@ -281,19 +350,21 @@
                             errorDisplay.textContent = 'Error: Lost connection to log stream';
                             eventSource.close();
                             eventSource = null;
-                            isFollowing = false;
+                            isFollowing = false; // Reset follow state
                             followToggle.textContent = 'Follow Off';
-                            followToggle.classList.remove('bg-green-500', 'hover:bg-green-600');
-                            followToggle.classList.add('bg-gray-500', 'hover:bg-gray-600');
+                            followToggle.classList.remove('bg-green-500', 'hover:bg-green-600', 'focus:ring-green-500');
+                            followToggle.classList.add('bg-gray-500', 'hover:bg-gray-600', 'focus:ring-gray-500');
                         };
                     } else {
-                        // Regular fetch for non-following mode
-                        const data = await fetchFromServer(`/api/logs?${params.toString()}`);
+                        // Regular fetch for non-following mode (live or archived)
+                        const data = await fetchFromServer(`${apiEndpoint}?${params.toString()}`);
                         currentLogs = data.logs || [];
                         renderLogs();
                     }
                 } catch (error) {
                     currentLogs = [];
+                    // Error is already displayed by fetchFromServer, but ensure logs are cleared
+                    logOutput.textContent = 'Error loading logs. Check console for details.';
                 } finally {
                     loadingIndicator.classList.add('hidden');
                 }

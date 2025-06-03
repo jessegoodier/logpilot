@@ -10,6 +10,10 @@ from flask import (
     render_template_string,
 )
 import json
+import threading  # Added for log archival watcher
+
+# --- Log Archiver Imports ---
+from log_archiver import start_log_cleanup_job, watch_pods_and_archive
 
 # --- Flask App Setup ---
 app = Flask(
@@ -50,9 +54,42 @@ KUBE_NAMESPACE = os.environ.get("K8S_NAMESPACE", "default")
 KUBE_POD_NAME = os.environ.get("K8S_POD_NAME", "NOT-SET")
 app.logger.info(f"Targeting Kubernetes namespace: {KUBE_NAMESPACE}")
 
+# --- Log Archival Configuration ---
+RETAIN_ALL_POD_LOGS = os.environ.get("RETAIN_ALL_POD_LOGS", "false").lower() == "true"
+MAX_LOG_RETENTION_MINUTES = int(
+    os.environ.get("MAX_LOG_RETENTION_MINUTES", "10080")
+)  # Default 7 days
+LOG_DIR = "/logs"
+
+if RETAIN_ALL_POD_LOGS:
+    if not os.path.exists(LOG_DIR):
+        try:
+            os.makedirs(LOG_DIR)
+            app.logger.info(f"Created log directory: {LOG_DIR}")
+        except OSError as e:
+            app.logger.error(f"Failed to create log directory {LOG_DIR}: {e}")
+            # Potentially exit or disable archival if directory creation fails
+            RETAIN_ALL_POD_LOGS = False  # Disable if cannot create dir
+
 app.logger.info(f"Targeting Kubernetes namespace: {KUBE_NAMESPACE}")
 
 app.secret_key = os.urandom(24)  # Required for session
+
+# --- Start Background Jobs (if applicable) ---
+if RETAIN_ALL_POD_LOGS:
+    # Start the log cleanup job
+    start_log_cleanup_job(LOG_DIR, MAX_LOG_RETENTION_MINUTES, app.logger)
+    # Start the pod watcher and log archiver job
+    app.logger.info("Log archival enabled. Starting pod watcher...")
+    watch_thread = threading.Thread(
+        target=watch_pods_and_archive,
+        args=(KUBE_NAMESPACE, v1, LOG_DIR, app.logger),
+        daemon=True,
+    )
+    watch_thread.name = "PodLogArchiverThread"
+    watch_thread.start()
+else:
+    app.logger.info("Log archival is disabled (RETAIN_ALL_POD_LOGS is false).")
 
 
 def require_api_key(f):
@@ -347,6 +384,130 @@ def get_logs():
             ),
             500,
         )
+
+
+@app.route("/api/archived_pods", methods=["GET"])
+@require_api_key
+def get_archived_pods():
+    """
+    API endpoint to list archived pod log files.
+    Only active if RETAIN_ALL_POD_LOGS is true.
+    Returns a JSON list of pod names for which archived logs exist.
+    """
+    global LOG_DIR, RETAIN_ALL_POD_LOGS
+    if not RETAIN_ALL_POD_LOGS:
+        return (
+            jsonify({"archived_pods": [], "message": "Log archival is not enabled."}),
+            200,
+        )
+
+    archived_pod_names = []
+    if os.path.exists(LOG_DIR):
+        try:
+            for filename in os.listdir(LOG_DIR):
+                if filename.endswith(".log"):
+                    # Remove .log extension to get pod name
+                    pod_name = filename[:-4]
+                    archived_pod_names.append(pod_name)
+            app.logger.info(
+                f"Found {len(archived_pod_names)} archived pod logs in {LOG_DIR}."
+            )
+        except OSError as e:
+            app.logger.error(f"Error listing archived logs directory {LOG_DIR}: {e}")
+            return jsonify({"message": f"Error accessing log archive: {str(e)}"}), 500
+    else:
+        app.logger.info(f"Log archival directory {LOG_DIR} does not exist.")
+
+    return jsonify({"archived_pods": archived_pod_names})
+
+
+@app.route("/api/archived_logs", methods=["GET"])
+@require_api_key
+def get_archived_logs():
+    """
+    API endpoint to fetch logs for a specific archived pod log file.
+    Query Parameters:
+        - pod_name (required): The name of the pod (filename without .log).
+        - sort_order (optional, default 'desc'): 'asc' or 'desc'.
+        - tail_lines (optional, default '0'): Number of lines. '0' for all.
+        - search_string (optional): String to filter log messages.
+    """
+    global LOG_DIR, RETAIN_ALL_POD_LOGS
+    if not RETAIN_ALL_POD_LOGS:
+        return jsonify({"message": "Log archival is not enabled."}), 403  # Forbidden
+
+    pod_name = request.args.get("pod_name")
+    sort_order = request.args.get("sort_order", "desc").lower()
+    tail_lines_str = request.args.get("tail_lines", "0")  # Default to all for archived
+    search_string = request.args.get("search_string", "").strip().lower()
+
+    app.logger.info(
+        f"Request for /api/archived_logs: pod='{pod_name}', sort='{sort_order}', lines='{tail_lines_str}', search='{search_string}'"
+    )
+
+    if not pod_name:
+        app.logger.warning("Bad request to /api/archived_logs: pod_name missing.")
+        return jsonify({"message": "Pod name is required for archived logs"}), 400
+
+    log_file_path = os.path.join(LOG_DIR, f"{pod_name}.log")
+
+    if not os.path.exists(log_file_path):
+        app.logger.warning(f"Archived log file not found: {log_file_path}")
+        return jsonify({"message": f"Archived log for pod {pod_name} not found."}), 404
+
+    try:
+        tail_lines = int(tail_lines_str) if tail_lines_str != "0" else None
+        if tail_lines is not None and tail_lines < 0:
+            return jsonify({"message": "tail_lines must be non-negative or 0."}), 400
+    except ValueError:
+        return jsonify({"message": "Invalid number for tail_lines."}), 400
+
+    try:
+        with open(log_file_path, "r", encoding="utf-8") as f:
+            raw_log_lines = f.readlines()
+
+        app.logger.info(
+            f"Read {len(raw_log_lines)} lines from archived file {log_file_path}."
+        )
+
+        processed_logs = []
+        for line_str in raw_log_lines:
+            if not line_str.strip():
+                continue
+            log_entry = parse_log_line(line_str)  # Re-use existing parser
+            if search_string and search_string not in log_entry["message"].lower():
+                continue
+            processed_logs.append(log_entry)
+
+        app.logger.info(
+            f"{len(processed_logs)} lines after search filter for archived pod '{pod_name}'."
+        )
+
+        # Apply tail_lines after filtering, before sorting if necessary
+        # If tail_lines is specified, we usually want the most recent N lines from the perspective of the file's end.
+        # Since we read all lines, if tail_lines is used, we take the last N of the processed_logs.
+        # The sorting below will then arrange these N lines.
+
+        # Sorting: Logs in files are typically oldest first.
+        # Default behavior: oldest first (asc) from file.
+        if sort_order == "desc":  # Newest first
+            processed_logs.reverse()
+
+        # Apply tail_lines AFTER sorting to get the correct N lines based on sort order
+        if tail_lines is not None and tail_lines > 0:
+            processed_logs = processed_logs[:tail_lines]
+            # If sort was asc, tail_lines would take the first N (oldest).
+            # If sort was desc, tail_lines would take the first N (newest).
+            # This behavior is consistent with how `tail` command works on a sorted list.
+
+        return jsonify({"logs": processed_logs})
+
+    except Exception as e:
+        app.logger.error(
+            f"Unexpected error fetching archived logs for pod '{pod_name}': {str(e)}",
+            exc_info=True,
+        )
+        return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
 
 
 # --- Main Execution ---
