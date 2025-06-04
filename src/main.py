@@ -15,9 +15,7 @@ import json
 from log_archiver import start_log_cleanup_job, watch_pods_and_archive
 
 # --- Flask App Setup ---
-app = Flask(
-    __name__, static_folder=".", static_url_path=""
-)  # Serve static files from current dir
+app = Flask(__name__, static_folder=".", static_url_path="")  # Serve static files from current dir
 
 # --- Logging Configuration ---
 # Basic logging to see Flask and K8s client interactions
@@ -39,9 +37,7 @@ except config.ConfigException:
         config.load_kube_config()
         app.logger.info("Loaded local Kubernetes configuration (kubeconfig).")
     except config.ConfigException as e:
-        app.logger.error(
-            f"Could not configure Kubernetes client: {e}. Ensure KUBECONFIG is set or app is in-cluster."
-        )
+        app.logger.error(f"Could not configure Kubernetes client: {e}. Ensure KUBECONFIG is set or app is in-cluster.")
         # For a real app, you might want to prevent startup or have a clear error state.
         # Here, we'll let it proceed, and API calls will fail if K8s client isn't configured.
 
@@ -55,9 +51,7 @@ app.logger.info(f"Targeting Kubernetes namespace: {KUBE_NAMESPACE}")
 
 # --- Log Archival Configuration ---
 RETAIN_ALL_POD_LOGS = os.environ.get("RETAIN_ALL_POD_LOGS", "false").lower() == "true"
-MAX_LOG_RETENTION_MINUTES = int(
-    os.environ.get("MAX_LOG_RETENTION_MINUTES", "10080")
-)  # Default 7 days
+MAX_LOG_RETENTION_MINUTES = int(os.environ.get("MAX_LOG_RETENTION_MINUTES", "10080"))  # Default 7 days
 LOG_DIR = "/logs"
 
 if RETAIN_ALL_POD_LOGS:
@@ -156,14 +150,10 @@ def parse_log_line(line_str):
     # Regex to capture RFC3339Nano timestamp (YYYY-MM-DDTHH:MM:SS.sssssssssZ)
     # and the rest of the line as the message.
     # The (\.\d+)? part handles optional fractional seconds.
-    match = re.match(
-        r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z)\s(.*)", line_str
-    )
+    match = re.match(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z)\s(.*)", line_str)
     if match:
         timestamp_str = match.group(1)
-        message_str = match.group(
-            3
-        ).strip()  # Get the message part and strip any trailing whitespace
+        message_str = match.group(3).strip()  # Get the message part and strip any trailing whitespace
         return {"timestamp": timestamp_str, "message": message_str}
     else:
         # If no timestamp is found at the beginning, return the whole line as the message.
@@ -196,11 +186,7 @@ def get_pods():
     try:
         pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
         if exclude_self:
-            pod_names = [
-                pod.metadata.name
-                for pod in pod_list_response.items
-                if pod.metadata.name != KUBE_POD_NAME
-            ]
+            pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
         else:
             pod_names = [pod.metadata.name for pod in pod_list_response.items]
         app.logger.info(f"Found {len(pod_names)} pods in namespace '{KUBE_NAMESPACE}'")
@@ -212,9 +198,7 @@ def get_pods():
             }
         )
     except ApiException as e:
-        app.logger.error(
-            f"Kubernetes API error fetching pods: {e.status} - {e.reason} - {e.body}"
-        )
+        app.logger.error(f"Kubernetes API error fetching pods: {e.status} - {e.reason} - {e.body}")
         return jsonify({"message": f"Error fetching pods: {e.reason}"}), e.status
     except Exception as e:
         app.logger.error(f"Unexpected error fetching pods: {str(e)}")
@@ -258,16 +242,10 @@ def get_logs():
             pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
 
             # never show the logger pod
-            pod_names = [
-                pod.metadata.name
-                for pod in pod_list_response.items
-                if pod.metadata.name != KUBE_POD_NAME
-            ]
+            pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
 
             if not pod_names:
-                return jsonify(
-                    {"logs": [], "message": "No pods found in the namespace."}
-                )
+                return jsonify({"logs": [], "message": "No pods found in the namespace."})
             all_logs = []
             for p_name_item in pod_names:
                 try:
@@ -284,17 +262,12 @@ def get_logs():
                         if not line_str:
                             continue
                         log_entry = parse_log_line(line_str)
-                        if (
-                            search_string
-                            and search_string not in log_entry["message"].lower()
-                        ):
+                        if search_string and search_string not in log_entry["message"].lower():
                             continue
                         log_entry["pod_name"] = p_name_item
                         all_logs.append(log_entry)
                 except ApiException as e:
-                    app.logger.warning(
-                        f"Could not fetch logs for pod {p_name_item}: {e.status} - {e.reason}"
-                    )
+                    app.logger.warning(f"Could not fetch logs for pod {p_name_item}: {e.status} - {e.reason}")
                     all_logs.append(
                         {
                             "pod_name": p_name_item,
@@ -382,9 +355,7 @@ def get_archived_pods():
     global LOG_DIR, RETAIN_ALL_POD_LOGS
     if not RETAIN_ALL_POD_LOGS:
         return (
-            jsonify(
-                {"archived_pods": [], "message": "Previous pod logs are not enabled."}
-            ),
+            jsonify({"archived_pods": [], "message": "Previous pod logs are not enabled."}),
             200,
         )
 
@@ -397,13 +368,9 @@ def get_archived_pods():
                     pod_name = filename[:-4]
                     if KUBE_POD_NAME not in pod_name:
                         archived_pod_names.append(pod_name)
-            app.logger.info(
-                f"Found {len(archived_pod_names)} previous pod logs in {LOG_DIR}."
-            )
+            app.logger.info(f"Found {len(archived_pod_names)} previous pod logs in {LOG_DIR}.")
         except OSError as e:
-            app.logger.error(
-                f"Error listing previous pod logs directory {LOG_DIR}: {e}"
-            )
+            app.logger.error(f"Error listing previous pod logs directory {LOG_DIR}: {e}")
             return jsonify({"message": f"Error accessing log archive: {str(e)}"}), 500
     else:
         app.logger.info(f"Previous pod logs directory {LOG_DIR} does not exist.")
@@ -459,9 +426,7 @@ def get_archived_logs():
         with open(log_file_path, "r", encoding="utf-8") as f:
             raw_log_lines = f.readlines()
 
-        app.logger.info(
-            f"Read {len(raw_log_lines)} lines from archived file {log_file_path}."
-        )
+        app.logger.info(f"Read {len(raw_log_lines)} lines from archived file {log_file_path}.")
 
         processed_logs = []
         for line_str in raw_log_lines:
@@ -472,9 +437,7 @@ def get_archived_logs():
                 continue
             processed_logs.append(log_entry)
 
-        app.logger.info(
-            f"{len(processed_logs)} lines after search filter for archived pod '{pod_name}'."
-        )
+        app.logger.info(f"{len(processed_logs)} lines after search filter for archived pod '{pod_name}'.")
 
         # Apply tail_lines after filtering, before sorting if necessary
         # If tail_lines is specified, we usually want the most recent N lines from the perspective of the file's end.

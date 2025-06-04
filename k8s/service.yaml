@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kube-web-log-viewer-service
+  # namespace: your-target-namespace
+  labels:
+    app.kubernetes.io/name: kube-web-log-viewer
+spec:
+  selector:
+    app.kubernetes.io/name: kube-web-log-viewer
+  ports:
+  - name: http
+    protocol: TCP
+    port: 5001
+    targetPort: 5001

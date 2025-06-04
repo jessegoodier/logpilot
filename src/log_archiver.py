@@ -14,9 +14,7 @@ def delete_old_logs(log_dir, max_age_minutes, logger):
         logger.warning(f"Log directory {log_dir} does not exist. Skipping cleanup.")
         return
 
-    logger.info(
-        f"Starting cleanup of logs older than {max_age_minutes} minutes in {log_dir}..."
-    )
+    logger.info(f"Starting cleanup of logs older than {max_age_minutes} minutes in {log_dir}...")
     cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
     deleted_count = 0
     error_count = 0
@@ -26,15 +24,11 @@ def delete_old_logs(log_dir, max_age_minutes, logger):
             file_path = os.path.join(log_dir, filename)
             try:
                 file_mod_time_timestamp = os.path.getmtime(file_path)
-                file_mod_time = datetime.fromtimestamp(
-                    file_mod_time_timestamp, timezone.utc
-                )
+                file_mod_time = datetime.fromtimestamp(file_mod_time_timestamp, timezone.utc)
 
                 if file_mod_time < cutoff_time:
                     os.remove(file_path)
-                    logger.info(
-                        f"Deleted old log file: {file_path} (modified {file_mod_time})"
-                    )
+                    logger.info(f"Deleted old log file: {file_path} (modified {file_mod_time})")
                     deleted_count += 1
             except OSError as e:
                 logger.error(f"Error deleting file {file_path}: {e}")
@@ -42,9 +36,7 @@ def delete_old_logs(log_dir, max_age_minutes, logger):
             except Exception as e:
                 logger.error(f"Unexpected error processing file {file_path}: {e}")
                 error_count += 1
-    logger.info(
-        f"Log cleanup finished. Deleted: {deleted_count}, Errors: {error_count}"
-    )
+    logger.info(f"Log cleanup finished. Deleted: {deleted_count}, Errors: {error_count}")
 
 
 def start_log_cleanup_job(log_dir, max_age_minutes, logger, interval_minutes=10):
@@ -52,18 +44,14 @@ def start_log_cleanup_job(log_dir, max_age_minutes, logger, interval_minutes=10)
     Starts a periodic job to delete old logs.
     Runs in a daemon thread so it doesn't block application exit.
     """
-    logger.info(
-        f"Initializing log cleanup job. Will run every {interval_minutes} minutes."
-    )
+    logger.info(f"Initializing log cleanup job. Will run every {interval_minutes} minutes.")
 
     def job():
         while True:
             try:
                 delete_old_logs(log_dir, max_age_minutes, logger)
             except Exception as e:
-                logger.error(
-                    f"Unhandled exception in log cleanup job: {e}", exc_info=True
-                )
+                logger.error(f"Unhandled exception in log cleanup job: {e}", exc_info=True)
             time.sleep(interval_minutes * 60)
 
     thread = threading.Thread(target=job, daemon=True)
@@ -105,9 +93,7 @@ def archive_pod_logs(pod_name, namespace, v1_api, log_dir, logger, stop_event):
 
             for log_line_bytes in log_stream:
                 if stop_event.is_set():
-                    logger.info(
-                        f"Stop event received for pod {pod_name}. Stopping archival."
-                    )
+                    logger.info(f"Stop event received for pod {pod_name}. Stopping archival.")
                     break
 
                 log_line = log_line_bytes.decode("utf-8", errors="replace").strip()
@@ -121,18 +107,14 @@ def archive_pod_logs(pod_name, namespace, v1_api, log_dir, logger, stop_event):
 
     except ApiException as e:
         if e.status == 404:
-            logger.warning(
-                f"Pod {pod_name} not found during log archival (possibly deleted): {e.reason}"
-            )
+            logger.warning(f"Pod {pod_name} not found during log archival (possibly deleted): {e.reason}")
         else:
             logger.error(
                 f"Kubernetes API error archiving logs for {pod_name}: {e.status} - {e.reason}",
                 exc_info=True,
             )
     except Exception as e:
-        logger.error(
-            f"Unexpected error archiving logs for pod {pod_name}: {e}", exc_info=True
-        )
+        logger.error(f"Unexpected error archiving logs for pod {pod_name}: {e}", exc_info=True)
     finally:
         logger.info(f"Log archival ended for pod {pod_name}.")
         # Clean up from active_archivals should be handled by the watcher
@@ -143,30 +125,21 @@ def watch_pods_and_archive(namespace, v1_api, log_dir, logger):
     Watches for pod creation and deletion in the namespace to start/stop log archival.
     This function is intended to be run in a background thread.
     """
-    logger.info(
-        f"Starting pod watcher for namespace '{namespace}' to archive logs to '{log_dir}'."
-    )
+    logger.info(f"Starting pod watcher for namespace '{namespace}' to archive logs to '{log_dir}'.")
     w = watch.Watch()
 
     while True:  # Loop to allow restarting watch on errors
         try:
             logger.info(f"Watching for pod events in namespace '{namespace}'...")
-            for event in w.stream(
-                v1_api.list_namespaced_pod, namespace=namespace, timeout_seconds=60
-            ):
+            for event in w.stream(v1_api.list_namespaced_pod, namespace=namespace, timeout_seconds=60):
                 pod = event["object"]
                 pod_name = pod.metadata.name
                 event_type = event["type"]  # ADDED, MODIFIED, DELETED
 
                 with archival_lock:
                     if event_type == "ADDED":
-                        if (
-                            pod.status.phase == "Running"
-                            and pod_name not in active_archivals
-                        ):
-                            logger.info(
-                                f"Pod {pod_name} is Running. Starting log archival."
-                            )
+                        if pod.status.phase == "Running" and pod_name not in active_archivals:
+                            logger.info(f"Pod {pod_name} is Running. Starting log archival.")
                             stop_event = threading.Event()
                             thread = threading.Thread(
                                 target=archive_pod_logs,
@@ -197,13 +170,8 @@ def watch_pods_and_archive(namespace, v1_api, log_dir, logger):
 
                     elif event_type == "MODIFIED":
                         # If a pod transitions to Running and we are not archiving it yet.
-                        if (
-                            pod.status.phase == "Running"
-                            and pod_name not in active_archivals
-                        ):
-                            logger.info(
-                                f"Pod {pod_name} transitioned to Running. Starting log archival."
-                            )
+                        if pod.status.phase == "Running" and pod_name not in active_archivals:
+                            logger.info(f"Pod {pod_name} transitioned to Running. Starting log archival.")
                             stop_event = threading.Event()
                             thread = threading.Thread(
                                 target=archive_pod_logs,
@@ -224,10 +192,7 @@ def watch_pods_and_archive(namespace, v1_api, log_dir, logger):
                             }
                             thread.start()
                         # If a pod is no longer running (e.g., Succeeded, Failed) and we were archiving.
-                        elif (
-                            pod.status.phase not in ["Running", "Pending"]
-                            and pod_name in active_archivals
-                        ):
+                        elif pod.status.phase not in ["Running", "Pending"] and pod_name in active_archivals:
                             logger.info(
                                 f"Pod {pod_name} is no longer Running (phase: {pod.status.phase}). Stopping log archival."
                             )
@@ -238,24 +203,18 @@ def watch_pods_and_archive(namespace, v1_api, log_dir, logger):
 
                     elif event_type == "DELETED":
                         if pod_name in active_archivals:
-                            logger.info(
-                                f"Pod {pod_name} DELETED. Stopping log archival."
-                            )
+                            logger.info(f"Pod {pod_name} DELETED. Stopping log archival.")
                             archival_info = active_archivals.pop(pod_name)
                             archival_info["stop_event"].set()
                             # archival_info["thread"].join(timeout=10) # Wait for thread to finish
                             # logger.info(f"Log archival thread for {pod_name} joined.")
                         else:
-                            logger.info(
-                                f"Pod {pod_name} DELETED event, but was not being actively archived."
-                            )
+                            logger.info(f"Pod {pod_name} DELETED event, but was not being actively archived.")
             logger.debug("Watch stream timeout or ended, will restart.")
 
         except ApiException as e:
             if e.status == 410:  # Gone, resource version too old
-                logger.warning(
-                    "Kubernetes watch API error: Resource version too old (410 Gone). Restarting watch."
-                )
+                logger.warning("Kubernetes watch API error: Resource version too old (410 Gone). Restarting watch.")
                 # Reset resource_version for the w.stream call if possible, or just let it restart
             else:
                 logger.error(
@@ -264,9 +223,7 @@ def watch_pods_and_archive(namespace, v1_api, log_dir, logger):
                 )
                 time.sleep(30)
         except Exception as e:
-            logger.error(
-                f"Unexpected error in pod watcher: {e}. Retrying in 30s.", exc_info=True
-            )
+            logger.error(f"Unexpected error in pod watcher: {e}. Retrying in 30s.", exc_info=True)
             time.sleep(30)
         finally:
             # Clean up any threads that might have exited unexpectedly without being removed
@@ -275,12 +232,8 @@ def watch_pods_and_archive(namespace, v1_api, log_dir, logger):
                 stale_pods = []
                 for pod_name, info in active_archivals.items():
                     if not info["thread"].is_alive():
-                        logger.warning(
-                            f"Archival thread for {pod_name} found dead. Cleaning up."
-                        )
-                        info[
-                            "stop_event"
-                        ].set()  # Ensure event is set if thread died before setting it
+                        logger.warning(f"Archival thread for {pod_name} found dead. Cleaning up.")
+                        info["stop_event"].set()  # Ensure event is set if thread died before setting it
                         stale_pods.append(pod_name)
                 for pod_name in stale_pods:
                     active_archivals.pop(pod_name, None)

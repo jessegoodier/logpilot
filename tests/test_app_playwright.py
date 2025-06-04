@@ -32,9 +32,7 @@ def test_log_viewer_e2e(page: Page):
         # Wait for namespace to be displayed (indicates initial data load)
         namespace_display = page.locator("#namespaceValue")
         expect(namespace_display).not_to_have_text("Loading...", timeout=NAV_TIMEOUT)
-        expect(namespace_display).not_to_have_text(
-            "Error loading", timeout=ACTION_TIMEOUT
-        )
+        expect(namespace_display).not_to_have_text("Error loading", timeout=ACTION_TIMEOUT)
         print(f"Namespace displayed: {namespace_display.text_content()}")
 
         # --- Pod Selection ---
@@ -45,23 +43,17 @@ def test_log_viewer_e2e(page: Page):
         expect(pod_selector).to_be_visible(timeout=NAV_TIMEOUT)
 
         # Then check for options within the optgroup
-        expect(
-            pod_selector.locator("optgroup[label='Live Pods'] option")
-        ).to_have_count(1, timeout=NAV_TIMEOUT)
+        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(1, timeout=NAV_TIMEOUT)
         print("Pod selector populated.")
 
         # Find the log-gen pod option
         # The pod name will be dynamic, so we look for the prefix
         # We need to handle cases where it might be in an optgroup
-        log_gen_pod_option_locator = pod_selector.locator(
-            f"option[value^='{LOG_GEN_POD_NAME_PREFIX}']"
-        )
+        log_gen_pod_option_locator = pod_selector.locator(f"option[value^='{LOG_GEN_POD_NAME_PREFIX}']")
 
         # If not found directly, check within optgroups (common case)
         if not log_gen_pod_option_locator.count():
-            log_gen_pod_option_locator = pod_selector.locator(
-                f"optgroup > option[value^='{LOG_GEN_POD_NAME_PREFIX}']"
-            )
+            log_gen_pod_option_locator = pod_selector.locator(f"optgroup > option[value^='{LOG_GEN_POD_NAME_PREFIX}']")
 
         expect(log_gen_pod_option_locator).not_to_have_count(0, timeout=NAV_TIMEOUT)
 
@@ -117,17 +109,11 @@ def test_log_viewer_e2e(page: Page):
 
         # Regex to find styled log messages (e.g., <span class="...text-red...">...ERROR...</span>)
         # This is a simplified check for the text content within the log lines.
-        expect(log_output).to_contain_text(
-            re.compile(r"INFO", re.IGNORECASE), timeout=ACTION_TIMEOUT
-        )
+        expect(log_output).to_contain_text(re.compile(r"INFO", re.IGNORECASE), timeout=ACTION_TIMEOUT)
         print("Found INFO log.")
-        expect(log_output).to_contain_text(
-            re.compile(r"WARN", re.IGNORECASE), timeout=ACTION_TIMEOUT
-        )
+        expect(log_output).to_contain_text(re.compile(r"WARN", re.IGNORECASE), timeout=ACTION_TIMEOUT)
         print("Found WARN log.")
-        expect(log_output).to_contain_text(
-            re.compile(r"ERROR", re.IGNORECASE), timeout=ACTION_TIMEOUT
-        )
+        expect(log_output).to_contain_text(re.compile(r"ERROR", re.IGNORECASE), timeout=ACTION_TIMEOUT)
         print("Found ERROR log.")
 
         # --- Search Functionality Test ---
@@ -162,27 +148,21 @@ def test_log_viewer_e2e(page: Page):
         # The highlighting is done with <mark> tags
 
         # Wait for at least one marked log line
-        expect(log_output.locator("div.log-line mark")).not_to_have_count(
-            0, timeout=ACTION_TIMEOUT
-        )
+        expect(log_output.locator("div.log-line mark")).not_to_have_count(0, timeout=ACTION_TIMEOUT)
         print("Search term highlighting found.")
 
         log_lines = log_output.locator("div.log-line")
         for i in range(log_lines.count()):
             line = log_lines.nth(i)
             message_span = line.locator("span.log-message")
-            marked_text_count = message_span.locator(
-                f"mark:has-text('{search_term}')"
-            ).count()
+            marked_text_count = message_span.locator(f"mark:has-text('{search_term}')").count()
 
             # A line is valid if it's highlighted OR its text content includes the search term
             # (The log-gen pod might also output "Error fetching logs" if it has issues, these are also valid if searching for "Error")
             if marked_text_count == 0:
                 expect(message_span).to_contain_text(search_term, ignore_case=True)
 
-        print(
-            f"Search functionality verified. All visible logs contain '{search_term}'."
-        )
+        print(f"Search functionality verified. All visible logs contain '{search_term}'.")
 
         # Clear search
         clear_search_button = page.locator("#clearSearch")
@@ -204,9 +184,7 @@ def test_log_viewer_e2e(page: Page):
         """,
             timeout=LOG_LOAD_TIMEOUT,
         )
-        expect(log_output).to_contain_text(
-            re.compile(r"INFO", re.IGNORECASE), timeout=ACTION_TIMEOUT
-        )
+        expect(log_output).to_contain_text(re.compile(r"INFO", re.IGNORECASE), timeout=ACTION_TIMEOUT)
         print("INFO logs visible again after clearing search.")
 
         print("Playwright test completed successfully.")

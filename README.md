@@ -38,14 +38,14 @@ It was created to help engineers to be able to monitor the logs of their pods in
 
 ## Deploying
 
-1. Modify [the app config](kube-web-log-viewer.yaml). See comments on the API key usage
+1. Modify [the app config](k8s/deployment.yaml). See comments on the API key usage
 2. Create the configmap:
 
     ```sh
     kubectl create configmap kube-web-log-viewer \
-      --from-file=app.py \
-      --from-file=log_archiver.py \
-      --from-file=index.html \
+      --from-file=src/main.py \
+      --from-file=src/log_archiver.py \
+      --from-file=src/index.html \
       --from-file=pyproject.toml \
       -n YOUR_NAMESPACE
     ```
@@ -53,13 +53,13 @@ It was created to help engineers to be able to monitor the logs of their pods in
 3. Apply the main manifest:
 
     ```sh
-    kubectl apply -f kube-web-log-viewer.yaml -n YOUR_NAMESPACE
+    kubectl apply -f k8s/ -n YOUR_NAMESPACE
     ```
 
 4. Port-forward to the service:
 
     ```sh
-    kubectl port-forward -n YOUR_NAMESPACE svc/kube-log-viewer-service 5001:5001
+    kubectl port-forward -n YOUR_NAMESPACE svc/kube-web-log-viewer-service 5001:5001
     ```
 
 The API key is desinged to simply protect the UI from random users. Please use a VPN or other means to protect the app in sensitive environments. Happy to accept PRs to add more security.
@@ -109,8 +109,6 @@ Pull Request Guidelines
 - Follow the existing code style
 - Use clear commit messages that describe the changes
 - Reference any related issues in your PR description
-
-
 
 
 ## Development

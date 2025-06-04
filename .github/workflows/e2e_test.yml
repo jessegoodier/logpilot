@@ -35,10 +35,10 @@ jobs:
       # Create necessary test files in the cluster. Some configurations of the chart
       # require pre-existing files like Secrets in order for volume mounts to be valid. Without them,
       # Pods won't come up and tests will fail.
-      - name: Deploy log-viewer-testing test application
+      - name: Deploy log-generator test application
         run: |
           kubectl create ns log-viewer-testing
-          kubectl -n log-viewer-testing create -f tests/log-viewer-testing-deployment.yaml
+          kubectl -n log-viewer-testing create -f tests/log-gen-deployment.yaml
 
       # Install the chart with default values and check results.
       - name: Install kube-log-viewer

@@ -34,9 +34,7 @@ def are_all_pods_ready():
             if not container.ready:
                 return f"Container {container.name} in pod {pod.metadata.name} is not ready"
             if container.state.waiting:
-                return (
-                    f"Container {container.name} in pod {pod.metadata.name} is waiting"
-                )
+                return f"Container {container.name} in pod {pod.metadata.name} is waiting"
             if container.state.terminated:
                 return f"Container {container.name} in pod {pod.metadata.name} is terminated"
     return "G2G"
