@@ -32,16 +32,12 @@ jobs:
           node_image: kindest/node:${{ matrix.k8s-version.version }}
           kubectl_version: ${{ matrix.k8s-version.version }}
 
-      # Create necessary test files in the cluster. Some configurations of the chart
-      # require pre-existing files like Secrets in order for volume mounts to be valid. Without them,
-      # Pods won't come up and tests will fail.
       - name: Deploy log-generator test application
         run: |
           kubectl create ns log-viewer-testing
           kubectl -n log-viewer-testing create -f tests/log-gen-deployment.yaml
 
-      # Install the chart with default values and check results.
-      - name: Install kube-log-viewer
+      - name: Install kube-web-log-viewer
         run: |
           kubectl create configmap kube-web-log-viewer \
             --from-file=src/main.py \
@@ -76,7 +72,7 @@ jobs:
     needs: create-cluster
     strategy:
       matrix:
-        python-version: ['3.11']
+        python-version: ['3.12']
 
     steps:
       - name: Checkout repository

@@ -32,7 +32,7 @@ It was created to help engineers to be able to monitor the logs of their pods in
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.12+
 - [Flask](https://flask.palletsprojects.com/)
 - [kubernetes](https://github.com/kubernetes-client/python)
 
