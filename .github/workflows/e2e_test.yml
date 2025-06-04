@@ -42,7 +42,6 @@ jobs:
 
       # Install the chart with default values and check results.
       - name: Install kube-log-viewer
-        working-directory: ./kube-log-viewer
         run: |
           kubectl create configmap kube-web-log-viewer \
             --from-file=src/main.py \
