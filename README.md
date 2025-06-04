@@ -15,6 +15,7 @@ It was created to help engineers to be able to monitor the logs of their pods in
 - [Deploying](#deploying)
   - [Previous Pod Logs](#previous-pod-logs)
 - [Contributing](#contributing)
+- [Development](#development)
 
 ## Features
 
@@ -45,7 +46,7 @@ It was created to help engineers to be able to monitor the logs of their pods in
       --from-file=app.py \
       --from-file=log_archiver.py \
       --from-file=index.html \
-      --from-file=requirements.txt \
+      --from-file=pyproject.toml \
       -n YOUR_NAMESPACE
     ```
 
@@ -81,6 +82,7 @@ When enabled:
 - The retention period can be configured via `MAX_LOG_RETENTION_MINUTES` environment variable
 - The deployment uses emptyDir for the logs directory, so logs are not persisted across pod restarts
 
+
 ## Contributing
 
 We welcome contributions! Please follow these guidelines when submitting a Pull Request:
@@ -107,3 +109,24 @@ Pull Request Guidelines
 - Follow the existing code style
 - Use clear commit messages that describe the changes
 - Reference any related issues in your PR description
+
+
+
+
+## Development
+
+Testing is done with [Playwright](https://playwright.dev/).
+
+The tests assume that the test "log-gen" pod is running in the namespace where the app is deployed.
+
+To install development dependencies:
+
+```sh
+uv pip install -e ".[dev]"
+```
+
+To run the tests:
+
+```sh
+uv run pytest
+```

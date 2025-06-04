@@ -277,7 +277,7 @@ def get_logs():
                         timestamps=True,
                         tail_lines=tail_lines,
                         follow=False,
-                        _preload_content=True
+                        _preload_content=True,
                     )
                     raw_log_lines = log_data_stream.splitlines()
                     for line_str in raw_log_lines:
@@ -323,7 +323,7 @@ def get_logs():
                 timestamps=True,
                 tail_lines=tail_lines,
                 follow=False,
-                _preload_content=True # Ensure content is loaded
+                _preload_content=True,  # Ensure content is loaded
             )
 
             raw_log_lines = log_data_stream.splitlines()
@@ -382,7 +382,9 @@ def get_archived_pods():
     global LOG_DIR, RETAIN_ALL_POD_LOGS
     if not RETAIN_ALL_POD_LOGS:
         return (
-            jsonify({"archived_pods": [], "message": "Previous pod logs are not enabled."}),
+            jsonify(
+                {"archived_pods": [], "message": "Previous pod logs are not enabled."}
+            ),
             200,
         )
 
@@ -399,7 +401,9 @@ def get_archived_pods():
                 f"Found {len(archived_pod_names)} previous pod logs in {LOG_DIR}."
             )
         except OSError as e:
-            app.logger.error(f"Error listing previous pod logs directory {LOG_DIR}: {e}")
+            app.logger.error(
+                f"Error listing previous pod logs directory {LOG_DIR}: {e}"
+            )
             return jsonify({"message": f"Error accessing log archive: {str(e)}"}), 500
     else:
         app.logger.info(f"Previous pod logs directory {LOG_DIR} does not exist.")
@@ -420,7 +424,10 @@ def get_archived_logs():
     """
     global LOG_DIR, RETAIN_ALL_POD_LOGS
     if not RETAIN_ALL_POD_LOGS:
-        return jsonify({"message": "Previous pod logs are not enabled."}), 403  # Forbidden
+        return (
+            jsonify({"message": "Previous pod logs are not enabled."}),
+            403,
+        )  # Forbidden
 
     pod_name = request.args.get("pod_name")
     sort_order = request.args.get("sort_order", "desc").lower()

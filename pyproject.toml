@@ -1,0 +1,34 @@
+[project]
+name = "kube-web-log-viewer"
+version = "0.1.0"
+description = "A simple Kubernetes log viewer web app"
+requires-python = ">=3.11"
+dependencies = [
+    "flask",
+    "kubernetes"
+]
+
+[project.optional-dependencies]
+dev = [
+    "playwright",
+    "gunicorn",
+    "pytest",
+    "pytest-playwright",
+    "black",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]

@@ -58,7 +58,7 @@ spec:
       - name: kube-web-log-viewer-container
         image: python:3.13-slim
         command: ["/bin/sh", "-c"]
-        args: ["pip install -r /app/requirements.txt --break-system-packages && python /app/app.py"]
+        args: ["pip install -e /app --break-system-packages && python /app/app.py"]
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5001

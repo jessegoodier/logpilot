@@ -77,7 +77,7 @@ jobs:
     needs: create-cluster
     strategy:
       matrix:
-        python-version: ['3.11'] # Changed from 3.13 to more stable version
+        python-version: ['3.11']
 
     steps:
       - name: Checkout repository
@@ -87,22 +87,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Install pipenv
-        run: |
-          python -m pip install --upgrade pip
-          pip install pipenv
-
-      - name: Cache pipenv virtualenv
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/share/virtualenvs
-          key: ${{ runner.os }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pipenv-
+          cache: 'pip'
 
       - name: Install dependencies
-        run: pipenv install --dev --system --deploy --ignore-pipfile
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
 
       - name: Install Playwright browsers
         run: playwright install --with-deps
@@ -111,7 +101,6 @@ jobs:
         run: pytest tests/test_app_playwright.py
         env:
           PYTHONPATH: .
-          # Add any other environment variables your tests need
           TEST_BASE_URL: "http://localhost:5001"
 
       - name: Upload screenshots on failure

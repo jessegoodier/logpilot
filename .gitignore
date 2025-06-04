@@ -176,3 +176,4 @@ build-*.sh
 .kubeconfig
 temp/
 Pip*
+uv.lock
