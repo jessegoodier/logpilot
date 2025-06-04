@@ -286,7 +286,7 @@
                         if (filteredArchivedPods.length > 0) {
                             hasArchivedPods = true;
                             const archivedGroup = document.createElement('optgroup');
-                            archivedGroup.label = "Archived Logs";
+                            archivedGroup.label = "Previous Pods";
                             filteredArchivedPods.forEach(podName => {
                                 archivedGroup.appendChild(createOption(podName, podName, true));
                             });
@@ -295,7 +295,7 @@
                     }
 
                     if (!hasLivePods && !hasArchivedPods) {
-                        podSelector.innerHTML = '<option value="all">No pods or archived logs found</option>';
+                        podSelector.innerHTML = '<option value="all">No pods or previous pods found</option>';
                     }
 
                     // Try to restore previous selection

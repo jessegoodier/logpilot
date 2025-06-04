@@ -67,7 +67,7 @@ if RETAIN_ALL_POD_LOGS:
             app.logger.info(f"Created log directory: {LOG_DIR}")
         except OSError as e:
             app.logger.error(f"Failed to create log directory {LOG_DIR}: {e}")
-            # Potentially exit or disable archival if directory creation fails
+            # Potentially exit or disable previous pod logs if directory creation fails
             RETAIN_ALL_POD_LOGS = False  # Disable if cannot create dir
 
 app.logger.info(f"Targeting Kubernetes namespace: {KUBE_NAMESPACE}")
@@ -76,11 +76,12 @@ app.secret_key = os.urandom(24)  # Required for session
 
 # --- Start Background Jobs (if applicable) ---
 if RETAIN_ALL_POD_LOGS:
-    # Start the log cleanup job
-    import threading # Moved here as it's only used if RETAIN_ALL_POD_LOGS is true
+    # Start the previous pod logs cleanup job
+    import threading
+
     start_log_cleanup_job(LOG_DIR, MAX_LOG_RETENTION_MINUTES, app.logger)
-    # Start the pod watcher and log archiver job
-    app.logger.info("Log archival enabled. Starting pod watcher...")
+    # Start the pod watcher and previous pod logs archiver job
+    app.logger.info("Previous pod logs enabled. Starting pod watcher...")
     watch_thread = threading.Thread(
         target=watch_pods_and_archive,
         args=(KUBE_NAMESPACE, v1, LOG_DIR, app.logger),
@@ -89,7 +90,7 @@ if RETAIN_ALL_POD_LOGS:
     watch_thread.name = "PodLogArchiverThread"
     watch_thread.start()
 else:
-    app.logger.info("Log archival is disabled (RETAIN_ALL_POD_LOGS is false).")
+    app.logger.info("Previous pod logs are disabled (RETAIN_ALL_POD_LOGS is false).")
 
 
 def require_api_key(f):
@@ -187,18 +188,19 @@ def get_pods():
     API endpoint to list pods in the configured Kubernetes namespace.
     Returns a JSON object with the namespace, a list of pod names (excluding current pod), and the current pod name.
     """
-    global KUBE_NAMESPACE, KUBE_POD_NAME  # Use the globally configured namespace and pod name
+    global KUBE_NAMESPACE, KUBE_POD_NAME
     app.logger.info(f"Request for /api/pods in namespace '{KUBE_NAMESPACE}'")
-    
-    # Get exclude_self parameter from request
-    exclude_self = request.args.get('exclude_self', '').lower() == 'true'
-    app.logger.info(f"Raw exclude_self parameter value: '{request.args.get('exclude_self', '')}'")
-    app.logger.info(f"Processed exclude_self value: {exclude_self}")
-    
+
+    exclude_self = request.args.get("exclude_self", "").lower() == "true"
+
     try:
         pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
         if exclude_self:
-            pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
+            pod_names = [
+                pod.metadata.name
+                for pod in pod_list_response.items
+                if pod.metadata.name != KUBE_POD_NAME
+            ]
         else:
             pod_names = [pod.metadata.name for pod in pod_list_response.items]
         app.logger.info(f"Found {len(pod_names)} pods in namespace '{KUBE_NAMESPACE}'")
@@ -230,7 +232,7 @@ def get_logs():
         - search_string (optional): String to filter log messages by (case-insensitive).
     Returns a JSON object with a list of log entries, each with 'timestamp', 'message', and 'pod_name' (if 'all').
     """
-    global KUBE_NAMESPACE, v1 # Ensure v1 is accessible
+    global KUBE_NAMESPACE, v1
     pod_name_req = request.args.get("pod_name")
     sort_order = request.args.get("sort_order", "desc").lower()
     tail_lines_str = request.args.get("tail_lines", "100")
@@ -252,18 +254,20 @@ def get_logs():
         return jsonify({"message": "Invalid number for tail_lines."}), 400
 
     try:
-        if pod_name_req == 'all':
+        if pod_name_req == "all":
             pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
-            # Use the same exclude_self logic as get_pods
-            exclude_self = request.args.get('exclude_self', '').lower() == 'true'
-            app.logger.info(f"Raw exclude_self parameter value in get_logs: '{request.args.get('exclude_self', '')}'")
-            app.logger.info(f"Processed exclude_self value in get_logs: {exclude_self}")
-            
+
             # never show the logger pod
-            pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
-            
+            pod_names = [
+                pod.metadata.name
+                for pod in pod_list_response.items
+                if pod.metadata.name != KUBE_POD_NAME
+            ]
+
             if not pod_names:
-                return jsonify({"logs": [], "message": "No pods found in the namespace."})
+                return jsonify(
+                    {"logs": [], "message": "No pods found in the namespace."}
+                )
             all_logs = []
             for p_name_item in pod_names:
                 try:
@@ -272,38 +276,53 @@ def get_logs():
                         namespace=KUBE_NAMESPACE,
                         timestamps=True,
                         tail_lines=tail_lines,
-                        follow=False, # Explicitly False, as follow functionality is removed
-                         _preload_content=True # Ensure content is loaded
+                        follow=False,
+                        _preload_content=True
                     )
                     raw_log_lines = log_data_stream.splitlines()
                     for line_str in raw_log_lines:
                         if not line_str:
                             continue
                         log_entry = parse_log_line(line_str)
-                        if search_string and search_string not in log_entry["message"].lower():
+                        if (
+                            search_string
+                            and search_string not in log_entry["message"].lower()
+                        ):
                             continue
-                        log_entry['pod_name'] = p_name_item
+                        log_entry["pod_name"] = p_name_item
                         all_logs.append(log_entry)
                 except ApiException as e:
-                    app.logger.warning(f"Could not fetch logs for pod {p_name_item}: {e.status} - {e.reason}")
-                    all_logs.append({"pod_name": p_name_item, "timestamp": None, "message": f"Error fetching logs: {e.reason}", "error": True})
+                    app.logger.warning(
+                        f"Could not fetch logs for pod {p_name_item}: {e.status} - {e.reason}"
+                    )
+                    all_logs.append(
+                        {
+                            "pod_name": p_name_item,
+                            "timestamp": None,
+                            "message": f"Error fetching logs: {e.reason}",
+                            "error": True,
+                        }
+                    )
 
-            all_logs.sort(key=lambda x: x.get('timestamp') or "0000-00-00T00:00:00Z", reverse=(sort_order == 'desc'))
+            all_logs.sort(
+                key=lambda x: x.get("timestamp") or "0000-00-00T00:00:00Z",
+                reverse=(sort_order == "desc"),
+            )
 
             if tail_lines is not None and tail_lines > 0:
-                if sort_order == 'desc':
+                if sort_order == "desc":
                     all_logs = all_logs[:tail_lines]
                 else:
                     all_logs = all_logs[-tail_lines:]
 
             return jsonify({"logs": all_logs})
-        else: # Single pod
+        else:  # Single pod
             log_data_stream = v1.read_namespaced_pod_log(
                 name=pod_name_req,
                 namespace=KUBE_NAMESPACE,
                 timestamps=True,
                 tail_lines=tail_lines,
-                follow=False, # Explicitly False
+                follow=False,
                 _preload_content=True # Ensure content is loaded
             )
 
@@ -318,11 +337,14 @@ def get_logs():
                 processed_logs.append(log_entry)
 
             # Sort single pod logs by timestamp, consistent with all pods behavior
-            processed_logs.sort(key=lambda x: x.get('timestamp') or "0000-00-00T00:00:00Z", reverse=(sort_order == 'desc'))
+            processed_logs.sort(
+                key=lambda x: x.get("timestamp") or "0000-00-00T00:00:00Z",
+                reverse=(sort_order == "desc"),
+            )
 
             # Apply tail_lines after sorting
             if tail_lines is not None and tail_lines > 0:
-                if sort_order == 'desc':
+                if sort_order == "desc":
                     processed_logs = processed_logs[:tail_lines]  # Take newest N
                 else:
                     processed_logs = processed_logs[-tail_lines:]  # Take oldest N
@@ -338,7 +360,7 @@ def get_logs():
             try:
                 error_details = json.loads(e.body)
                 error_message = error_details.get("message", e.reason)
-            except json.JSONDecodeError: # pragma: no cover
+            except json.JSONDecodeError:  # pragma: no cover
                 error_message = f"{e.reason} (Details: {e.body[:200]})"
         return jsonify({"message": f"Error fetching logs: {error_message}"}), e.status
     except Exception as e:
@@ -353,14 +375,14 @@ def get_logs():
 @require_api_key
 def get_archived_pods():
     """
-    API endpoint to list archived pod log files.
+    API endpoint to list previous pod log files.
     Only active if RETAIN_ALL_POD_LOGS is true.
-    Returns a JSON list of pod names for which archived logs exist.
+    Returns a JSON list of pod names for which previous pod logs exist.
     """
     global LOG_DIR, RETAIN_ALL_POD_LOGS
     if not RETAIN_ALL_POD_LOGS:
         return (
-            jsonify({"archived_pods": [], "message": "Log archival is not enabled."}),
+            jsonify({"archived_pods": [], "message": "Previous pod logs are not enabled."}),
             200,
         )
 
@@ -371,16 +393,16 @@ def get_archived_pods():
                 if filename.endswith(".log"):
                     # Remove .log extension to get pod name
                     pod_name = filename[:-4]
-                    if not KUBE_POD_NAME in pod_name:
+                    if KUBE_POD_NAME not in pod_name:
                         archived_pod_names.append(pod_name)
             app.logger.info(
-                f"Found {len(archived_pod_names)} archived pod logs in {LOG_DIR}."
+                f"Found {len(archived_pod_names)} previous pod logs in {LOG_DIR}."
             )
         except OSError as e:
-            app.logger.error(f"Error listing archived logs directory {LOG_DIR}: {e}")
+            app.logger.error(f"Error listing previous pod logs directory {LOG_DIR}: {e}")
             return jsonify({"message": f"Error accessing log archive: {str(e)}"}), 500
     else:
-        app.logger.info(f"Log archival directory {LOG_DIR} does not exist.")
+        app.logger.info(f"Previous pod logs directory {LOG_DIR} does not exist.")
 
     return jsonify({"archived_pods": archived_pod_names})
 
@@ -389,7 +411,7 @@ def get_archived_pods():
 @require_api_key
 def get_archived_logs():
     """
-    API endpoint to fetch logs for a specific archived pod log file.
+    API endpoint to fetch logs for a specific previous pod log file.
     Query Parameters:
         - pod_name (required): The name of the pod (filename without .log).
         - sort_order (optional, default 'desc'): 'asc' or 'desc'.
@@ -398,11 +420,11 @@ def get_archived_logs():
     """
     global LOG_DIR, RETAIN_ALL_POD_LOGS
     if not RETAIN_ALL_POD_LOGS:
-        return jsonify({"message": "Log archival is not enabled."}), 403  # Forbidden
+        return jsonify({"message": "Previous pod logs are not enabled."}), 403  # Forbidden
 
     pod_name = request.args.get("pod_name")
     sort_order = request.args.get("sort_order", "desc").lower()
-    tail_lines_str = request.args.get("tail_lines", "0")  # Default to all for archived
+    tail_lines_str = request.args.get("tail_lines", "0")  # Default to all for previous
     search_string = request.args.get("search_string", "").strip().lower()
 
     app.logger.info(
@@ -417,7 +439,7 @@ def get_archived_logs():
 
     if not os.path.exists(log_file_path):
         app.logger.warning(f"Archived log file not found: {log_file_path}")
-        return jsonify({"message": f"Archived log for pod {pod_name} not found."}), 404
+        return jsonify({"message": f"Previous log for pod {pod_name} not found."}), 404
 
     try:
         tail_lines = int(tail_lines_str) if tail_lines_str != "0" else None

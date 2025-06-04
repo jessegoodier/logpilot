@@ -5,13 +5,15 @@ from kubernetes import client, config
 import subprocess
 import sys
 
+
 def get_current_namespace():
     """Get the current namespace from kubeconfig."""
     try:
         contexts, active_context = config.list_kube_config_contexts()
-        return active_context['context']['namespace']
+        return active_context["context"]["namespace"]
     except Exception:
         exit(1)
+
 
 def are_all_pods_ready():
     """Check if all pods in the current namespace are ready."""
@@ -32,10 +34,13 @@ def are_all_pods_ready():
             if not container.ready:
                 return f"Container {container.name} in pod {pod.metadata.name} is not ready"
             if container.state.waiting:
-                return f"Container {container.name} in pod {pod.metadata.name} is waiting"
+                return (
+                    f"Container {container.name} in pod {pod.metadata.name} is waiting"
+                )
             if container.state.terminated:
                 return f"Container {container.name} in pod {pod.metadata.name} is terminated"
     return "G2G"
+
 
 def wait_for_pods():
     """Wait for all pods to be ready."""
@@ -48,10 +53,18 @@ def wait_for_pods():
         print(result)
         time.sleep(2)
 
+
 def start_port_forward():
     """Start port forwarding to the kube-log-viewer-service."""
     print("Starting port forwarding...")
-    cmd = ["kubectl", "port-forward", "svc/kube-log-viewer-service", "5001:5001", "--address", "0.0.0.0"]
+    cmd = [
+        "kubectl",
+        "port-forward",
+        "svc/kube-log-viewer-service",
+        "5001:5001",
+        "--address",
+        "0.0.0.0",
+    ]
     try:
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
@@ -59,6 +72,7 @@ def start_port_forward():
         sys.exit(1)
     except KeyboardInterrupt:
         print("\nPort forwarding stopped.")
+
 
 def main():
     # Load kubernetes configuration
@@ -75,6 +89,7 @@ def main():
     time.sleep(4)
     # Start port forwarding
     start_port_forward()
+
 
 if __name__ == "__main__":
     main()
