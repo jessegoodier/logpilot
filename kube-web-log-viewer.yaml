@@ -1,74 +1,61 @@
-# Kubernetes Manifests for Kube Log Viewer
+# Kubernetes Manifests for kube-web-log-viewer
 
-# Note: Apply these manifests to the namespace where you want the application to run.
-# You can specify the namespace in each metadata section or use `kubectl apply -f <file> -n <your-namespace>`.
-
-# --- ServiceAccount ---
-# Grants an identity to the pods running the application.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kube-log-viewer-sa
+  name: kube-web-log-viewer-sa
   # namespace: your-target-namespace # Specify if not using kubectl -n flag
 
 ---
-# --- Role ---
-# Defines permissions that the application needs within its namespace.
-# It needs to list pods and get logs from pods.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: kube-log-viewer-role
+  name: kube-web-log-viewer-role
   # namespace: your-target-namespace # Should match the namespace of the ServiceAccount and Deployment
 rules:
-- apiGroups: [""] # Core API group
+- apiGroups: [""]
   resources: ["pods", "pods/log"] # Allows access to pods and their logs
   verbs: ["get", "list", "watch"] # Allows reading/listing these resources
 
 ---
-# --- RoleBinding ---
-# Binds the 'kube-log-viewer-role' to the 'kube-log-viewer-sa' ServiceAccount.
-# This grants the permissions defined in the Role to the pods using the ServiceAccount.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: kube-log-viewer-rb
+  name: kube-web-log-viewer-rb
   # namespace: your-target-namespace # Should match the Role and ServiceAccount namespace
 subjects:
 - kind: ServiceAccount
-  name: kube-log-viewer-sa
+  name: kube-web-log-viewer-sa
   # namespace: your-target-namespace # Must be the namespace where the SA is defined
 roleRef:
-  kind: Role # Referring to a Role (not ClusterRole)
-  name: kube-log-viewer-role
+  kind: Role
+  name: kube-web-log-viewer-role
   apiGroup: rbac.authorization.k8s.io
 
 ---
-# --- Deployment ---
-# Manages the deployment of your application pods.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kube-log-viewer-deployment
+  name: kube-web-log-viewer-deployment
   # namespace: your-target-namespace
   labels:
-    app: kube-log-viewer
+    app.kubernetes.io/name: kube-web-log-viewer
 spec:
-  replicas: 1 # Start with one replica
+  replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: kube-log-viewer # Must match labels in the pod template
+      app.kubernetes.io/name: kube-web-log-viewer
   template:
     metadata:
       labels:
-        app: kube-log-viewer # Labels applied to the pods
+        app.kubernetes.io/name: kube-web-log-viewer
     spec:
-      serviceAccountName: kube-log-viewer-sa # Use the ServiceAccount created above
-      terminationGracePeriodSeconds: 2 # Add a shorter grace period for faster restarts
+      serviceAccountName: kube-web-log-viewer-sa
+      terminationGracePeriodSeconds: 2
       containers:
-      - name: kube-log-viewer-container
+      - name: kube-web-log-viewer-container
         image: python:3.13-slim
         command: ["/bin/sh", "-c"]
         args: ["pip install -r /app/requirements.txt --break-system-packages && python /app/app.py"]
@@ -107,15 +94,13 @@ spec:
             cpu: "1500m"
         volumeMounts:
         - name: log-viewer-config
-          mountPath: /app # Change this to where your app expects app.py and index.html
-          # If you want to mount as read-only:
-          readOnly: true
+          mountPath: /app
         - name: log-dir
           mountPath: /logs
       volumes:
       - name: log-viewer-config
         configMap:
-          name: log-viewer
+          name: kube-web-log-viewer
       - name: log-dir
         # when using emptyDir, the logs are not persisted across pod restarts
         emptyDir: {}
@@ -125,20 +110,16 @@ spec:
         # storageClassName: standard # if there is no default storage class, you can specify one here
 
 ---
-# --- Service ---
-# Exposes your application within the Kubernetes cluster.
 apiVersion: v1
 kind: Service
 metadata:
-  name: kube-log-viewer-service
+  name: kube-web-log-viewer-service
   # namespace: your-target-namespace
   labels:
-    app: kube-log-viewer
+    app.kubernetes.io/name: kube-web-log-viewer
 spec:
-  type: ClusterIP # Default, exposes the service on an internal IP in the cluster.
-                 # Use NodePort or LoadBalancer for external access if needed.
   selector:
-    app: kube-log-viewer # Selects pods with this label (must match Deployment's pod labels)
+    app.kubernetes.io/name: kube-web-log-viewer
   ports:
   - name: http
     protocol: TCP

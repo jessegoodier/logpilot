@@ -45,13 +45,17 @@ def are_all_pods_ready():
 def wait_for_pods():
     """Wait for all pods to be ready."""
     print("Waiting for all pods to be ready...")
-    while True:
+    # try 10 times, then exit
+    for i in range(10):
         result = are_all_pods_ready()
         if result == "G2G":
             print("G2G!!!")
             return
         print(result)
         time.sleep(2)
+    print("Pods are not ready after 10 attempts, exiting...")
+    print(f"Last result: {result}")
+    sys.exit(1)
 
 
 def start_port_forward():
@@ -60,7 +64,7 @@ def start_port_forward():
     cmd = [
         "kubectl",
         "port-forward",
-        "svc/kube-log-viewer-service",
+        "svc/kube-web-log-viewer-service",
         "5001:5001",
         "--address",
         "0.0.0.0",

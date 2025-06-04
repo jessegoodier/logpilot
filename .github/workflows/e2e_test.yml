@@ -1,0 +1,123 @@
+name: E2E Tests
+
+on:
+  push:
+    branches:
+      - main # Or your default branch
+  pull_request:
+    branches:
+      - main # Or your default branch
+
+jobs:
+
+  create-cluster:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s-version:
+          - name: v1.32
+            version: v1.32.3
+    name: ${{ matrix.k8s-version.name }} test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Create KinD cluster
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with:
+          version: v0.20.0
+          node_image: kindest/node:${{ matrix.k8s-version.version }}
+          kubectl_version: ${{ matrix.k8s-version.version }}
+
+      # Create necessary test files in the cluster. Some configurations of the chart
+      # require pre-existing files like Secrets in order for volume mounts to be valid. Without them,
+      # Pods won't come up and tests will fail.
+      - name: Deploy log-viewer-testing test application
+        run: |
+          kubectl create ns log-viewer-testing
+          kubectl -n log-viewer-testing create -f tests/log-viewer-testing-deployment.yaml
+
+      # Install the chart with default values and check results.
+      - name: Install kube-log-viewer
+        working-directory: ./kube-log-viewer
+        run: |
+          kubectl create configmap kube-web-log-viewer \
+            --from-file=app.py \
+            --from-file=log_archiver.py \
+            --from-file=index.html \
+            --from-file=requirements.txt \
+            -n log-viewer-testing
+          kubectl apply -f kube-web-log-viewer.yaml
+
+      - name: Wait for ready
+        run: kubectl wait -n log-viewer-testing --for=condition=ready pod --selector app.kubernetes.io/name=kube-web-log-viewer --timeout=120s
+
+      - name: Start port forwarding
+        run: |
+          kubectl port-forward -n log-viewer-testing svc/kube-web-log-viewer-service 5001:5001 --address 0.0.0.0 > /dev/null 2>&1 &
+          echo $! > /tmp/port-forward.pid
+          # Wait for port to be ready
+          timeout 30s bash -c 'until nc -z localhost 5001; do sleep 1; done'
+          echo "Port forwarding is ready"
+
+      - name: Cleanup port forwarding
+        if: always()
+        run: |
+          if [ -f /tmp/port-forward.pid ]; then
+            kill $(cat /tmp/port-forward.pid) || true
+            rm /tmp/port-forward.pid
+          fi
+
+
+  test:
+    runs-on: ubuntu-latest
+    needs: create-cluster
+    strategy:
+      matrix:
+        python-version: ['3.11'] # Changed from 3.13 to more stable version
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pipenv
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipenv
+
+      - name: Cache pipenv virtualenv
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/virtualenvs
+          key: ${{ runner.os }}-pipenv-${{ hashFiles('**/Pipfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pipenv-
+
+      - name: Install dependencies
+        run: pipenv install --dev --system --deploy --ignore-pipfile
+
+      - name: Install Playwright browsers
+        run: playwright install --with-deps
+
+      - name: Run Playwright tests
+        run: pytest tests/test_app_playwright.py
+        env:
+          PYTHONPATH: .
+          # Add any other environment variables your tests need
+          TEST_BASE_URL: "http://localhost:5001"
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots-${{ matrix.python-version }}
+          path: test-results/
+          retention-days: 31

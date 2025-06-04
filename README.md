@@ -41,7 +41,7 @@ It was created to help engineers to be able to monitor the logs of their pods in
 2. Create the configmap:
 
     ```sh
-    kubectl create configmap log-viewer \
+    kubectl create configmap kube-web-log-viewer \
       --from-file=app.py \
       --from-file=log_archiver.py \
       --from-file=index.html \
