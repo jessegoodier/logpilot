@@ -189,11 +189,19 @@ def get_pods():
     """
     global KUBE_NAMESPACE, KUBE_POD_NAME  # Use the globally configured namespace and pod name
     app.logger.info(f"Request for /api/pods in namespace '{KUBE_NAMESPACE}'")
+    
+    # Get exclude_self parameter from request
+    exclude_self = request.args.get('exclude_self', '').lower() == 'true'
+    app.logger.info(f"exclude_self parameter: {exclude_self}")
+    
     try:
         pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
         # Filter out the current pod from the list
-        pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
-        app.logger.info(f"Found {len(pod_names)} pods in namespace '{KUBE_NAMESPACE}' (excluding current pod).")
+        if exclude_self:
+            pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
+        else:
+            pod_names = [pod.metadata.name for pod in pod_list_response.items]
+        app.logger.info(f"Found {len(pod_names)} pods in namespace '{KUBE_NAMESPACE}'")
         return jsonify(
             {
                 "namespace": KUBE_NAMESPACE,
@@ -358,7 +366,8 @@ def get_archived_pods():
                 if filename.endswith(".log"):
                     # Remove .log extension to get pod name
                     pod_name = filename[:-4]
-                    archived_pod_names.append(pod_name)
+                    if not KUBE_POD_NAME in pod_name:
+                        archived_pod_names.append(pod_name)
             app.logger.info(
                 f"Found {len(archived_pod_names)} archived pod logs in {LOG_DIR}."
             )

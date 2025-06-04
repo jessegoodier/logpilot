@@ -214,10 +214,14 @@
                     const currentOption = podSelector.options[podSelector.selectedIndex];
                     const isCurrentlyArchived = currentOption ? currentOption.dataset.isArchived === "true" : false;
 
-                    // Fetch live pods
-                    const livePodsData = await fetchFromServer('/api/pods');
+                    // Fetch live pods with exclude_self parameter
+                    const params = new URLSearchParams();
+                    if (excludeSelf.checked) {
+                        params.append('exclude_self', 'true');
+                    }
+                    const livePodsData = await fetchFromServer(`/api/pods?${params.toString()}`);
                     namespaceValue.textContent = livePodsData.namespace || 'N/A';
-                    currentPodName = livePodsData.pod_name || null; // Store the current pod name
+                    currentPodName = livePodsData.current_pod || null; // Store the current pod name
 
                     // Fetch archived pods
                     let archivedPodsData = { archived_pods: [] }; // Default empty

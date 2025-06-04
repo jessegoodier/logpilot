@@ -36,7 +36,12 @@ A simple Kubernetes log viewer web app. View logs from pods in your cluster with
 2. Create the configmap:
 
     ```sh
-    kubectl create configmap log-viewer --from-file=app.py --from-file=index.html --from-file=requirements.txt -n YOUR_NAMESPACE
+    kubectl create configmap log-viewer \
+      --from-file=app.py \
+      --from-file=log_archiver.py \
+      --from-file=index.html \
+      --from-file=requirements.txt \
+      -n YOUR_NAMESPACE
     ```
 
 3. Apply the main manifest:
