@@ -45,12 +45,12 @@ jobs:
         working-directory: ./kube-log-viewer
         run: |
           kubectl create configmap kube-web-log-viewer \
-            --from-file=app.py \
-            --from-file=log_archiver.py \
-            --from-file=index.html \
-            --from-file=requirements.txt \
+            --from-file=src/main.py \
+            --from-file=src/log_archiver.py \
+            --from-file=src/index.html \
+            --from-file=pyproject.toml \
             -n log-viewer-testing
-          kubectl apply -f kube-web-log-viewer.yaml
+          kubectl apply -f k8s/ -n log-viewer-testing
 
       - name: Wait for ready
         run: kubectl wait -n log-viewer-testing --for=condition=ready pod --selector app.kubernetes.io/name=kube-web-log-viewer --timeout=120s
