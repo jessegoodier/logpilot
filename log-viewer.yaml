@@ -66,6 +66,7 @@ spec:
         app: kube-log-viewer # Labels applied to the pods
     spec:
       serviceAccountName: kube-log-viewer-sa # Use the ServiceAccount created above
+      terminationGracePeriodSeconds: 2 # Add a shorter grace period for faster restarts
       containers:
       - name: kube-log-viewer-container
         image: python:3.13-slim

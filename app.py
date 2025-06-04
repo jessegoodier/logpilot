@@ -192,11 +192,11 @@ def get_pods():
     
     # Get exclude_self parameter from request
     exclude_self = request.args.get('exclude_self', '').lower() == 'true'
-    app.logger.info(f"exclude_self parameter: {exclude_self}")
+    app.logger.info(f"Raw exclude_self parameter value: '{request.args.get('exclude_self', '')}'")
+    app.logger.info(f"Processed exclude_self value: {exclude_self}")
     
     try:
         pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
-        # Filter out the current pod from the list
         if exclude_self:
             pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
         else:
@@ -254,11 +254,16 @@ def get_logs():
     try:
         if pod_name_req == 'all':
             pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
-            pod_names = [pod.metadata.name for pod in pod_list_response.items]
-
+            # Use the same exclude_self logic as get_pods
+            exclude_self = request.args.get('exclude_self', '').lower() == 'true'
+            app.logger.info(f"Raw exclude_self parameter value in get_logs: '{request.args.get('exclude_self', '')}'")
+            app.logger.info(f"Processed exclude_self value in get_logs: {exclude_self}")
+            
+            # never show the logger pod
+            pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
+            
             if not pod_names:
                 return jsonify({"logs": [], "message": "No pods found in the namespace."})
-
             all_logs = []
             for p_name_item in pod_names:
                 try:

@@ -67,8 +67,8 @@ def main():
     except Exception as e:
         print(f"Error loading kubernetes config: {e}")
         sys.exit(1)
-    print("Waiting for 4 seconds...")
-    time.sleep(4)
+    print("Waiting for 2 seconds...")
+    time.sleep(2)
     # Wait for pods to be ready
     wait_for_pods()
     print("Waiting for 4 seconds...")
