@@ -583,7 +583,12 @@
             });
 
             // Add event listener for excludeSelf checkbox
-            excludeSelf.addEventListener('change', fetchAndDisplayLogs);
+            excludeSelf.addEventListener('change', () => {
+                loadingIndicator.classList.remove('hidden');
+                fetchPods().finally(() => {
+                    loadingIndicator.classList.add('hidden');
+                });
+            });
 
             // Initial data fetch
             fetchPods();
