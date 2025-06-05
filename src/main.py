@@ -594,6 +594,39 @@ def get_log_dir_stats():
         return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
 
 
+@app.route("/api/purgeLogs", methods=["POST"])
+@require_api_key
+def purge_logs():
+    """
+    API endpoint to purge all log files.
+    Returns a JSON object with the number of files deleted and any errors.
+    """
+    global LOG_DIR, RETAIN_ALL_POD_LOGS
+    
+    if not RETAIN_ALL_POD_LOGS:
+        return jsonify({
+            "success": False,
+            "message": "Previous pod logs are not enabled."
+        }), 403
+
+    try:
+        from log_archiver import purge_all_logs
+        deleted_count, error_count = purge_all_logs(LOG_DIR, app.logger)
+        
+        return jsonify({
+            "success": True,
+            "deleted_count": deleted_count,
+            "error_count": error_count,
+            "message": f"Successfully purged {deleted_count} log files. {error_count} errors occurred."
+        })
+    except Exception as e:
+        app.logger.error(f"Error purging logs: {str(e)}", exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"An unexpected error occurred: {str(e)}"
+        }), 500
+
+
 # --- Main Execution ---
 if __name__ == "__main__":
     # Instructions to run:

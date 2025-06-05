@@ -12,6 +12,7 @@ import requests
 def delete_old_logs(log_dir, max_age_minutes, logger):
     """
     Deletes log files in the specified directory older than max_age_minutes.
+    Uses file creation time to determine age.
     """
     if not os.path.exists(log_dir):
         logger.warning(f"Log directory {log_dir} does not exist. Skipping cleanup.")
@@ -26,13 +27,27 @@ def delete_old_logs(log_dir, max_age_minutes, logger):
         if filename.endswith(".log"):  # Process only .log files
             file_path = os.path.join(log_dir, filename)
             try:
-                file_mod_time_timestamp = os.path.getmtime(file_path)
-                file_mod_time = datetime.fromtimestamp(file_mod_time_timestamp, timezone.utc)
+                # Get both creation and modification times
+                file_stats = os.stat(file_path)
+                file_creation_time = datetime.fromtimestamp(file_stats.st_ctime, timezone.utc)
+                file_mod_time = datetime.fromtimestamp(file_stats.st_mtime, timezone.utc)
 
-                if file_mod_time < cutoff_time:
+                if file_creation_time < cutoff_time:
                     os.remove(file_path)
-                    logger.info(f"Deleted old log file: {file_path} (modified {file_mod_time})")
+                    logger.info(
+                        f"Deleted old log file: {file_path}\n"
+                        f"  Created: {file_creation_time}\n"
+                        f"  Last Modified: {file_mod_time}\n"
+                        f"  Age: {(datetime.now(timezone.utc) - file_creation_time).total_seconds() / 60:.1f} minutes"
+                    )
                     deleted_count += 1
+                else:
+                    logger.debug(
+                        f"Keeping log file: {file_path}\n"
+                        f"  Created: {file_creation_time}\n"
+                        f"  Last Modified: {file_mod_time}\n"
+                        f"  Age: {(datetime.now(timezone.utc) - file_creation_time).total_seconds() / 60:.1f} minutes"
+                    )
             except OSError as e:
                 logger.error(f"Error deleting file {file_path}: {e}")
                 error_count += 1
@@ -193,3 +208,34 @@ def watch_pods_and_archive(namespace, v1, log_dir, logger):
 #         thread.name = "PodLogArchiverMainWatcher"
 #         thread.start()
 #         logger.info("Pod log archival watcher thread started.")
+
+
+def purge_all_logs(log_dir, logger):
+    """
+    Deletes all log files in the specified directory.
+    Returns a tuple of (deleted_count, error_count)
+    """
+    if not os.path.exists(log_dir):
+        logger.warning(f"Log directory {log_dir} does not exist. Nothing to purge.")
+        return 0, 0
+
+    logger.info(f"Starting purge of all logs in {log_dir}...")
+    deleted_count = 0
+    error_count = 0
+
+    for filename in os.listdir(log_dir):
+        if filename.endswith(".log"):  # Process only .log files
+            file_path = os.path.join(log_dir, filename)
+            try:
+                os.remove(file_path)
+                logger.info(f"Purged log file: {file_path}")
+                deleted_count += 1
+            except OSError as e:
+                logger.error(f"Error purging file {file_path}: {e}")
+                error_count += 1
+            except Exception as e:
+                logger.error(f"Unexpected error processing file {file_path}: {e}")
+                error_count += 1
+
+    logger.info(f"Log purge finished. Deleted: {deleted_count}, Errors: {error_count}")
+    return deleted_count, error_count
