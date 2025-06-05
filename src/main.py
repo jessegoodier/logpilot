@@ -532,7 +532,7 @@ def get_log_dir_stats():
     """
     API endpoint to get statistics about the log directory.
     Returns:
-        - total_size_bytes: Total size of all log files in bytes
+        - total_size_miBytes: Total size of all log files in miBytes
         - file_count: Number of log files
         - oldest_file_date: Creation date of the oldest log file
         - enabled: Whether log archiving is enabled
@@ -548,7 +548,7 @@ def get_log_dir_stats():
     if not os.path.exists(LOG_DIR):
         return jsonify({
             "enabled": True,
-            "total_size_bytes": 0,
+            "total_size_mibytes": 0,
             "file_count": 0,
             "oldest_file_date": None,
             "message": "Log directory does not exist."
@@ -581,7 +581,7 @@ def get_log_dir_stats():
 
         return jsonify({
             "enabled": True,
-            "total_size_bytes": total_size,
+            "total_size_mibytes": total_size/1024/1024,
             "file_count": file_count,
             "oldest_file_date": oldest_date_iso,
             "log_directory": LOG_DIR

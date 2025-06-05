@@ -6,6 +6,7 @@ from kubernetes import watch
 from kubernetes.client.rest import ApiException
 import logging
 from kubernetes import client
+import requests
 
 
 def delete_old_logs(log_dir, max_age_minutes, logger):
@@ -115,6 +116,35 @@ def archive_pod_logs(v1, namespace, pod_name, log_dir):
         logging.error(f"Error archiving logs for pod {pod_name}: {e}")
 
 
+def get_log_dir_stats(log_dir):
+    """
+    Get statistics about the log directory.
+    Returns a tuple of (total_size_bytes, file_count, oldest_date)
+    """
+    if not os.path.exists(log_dir):
+        return 0, 0, None
+
+    total_size = 0
+    file_count = 0
+    oldest_date = None
+
+    for filename in os.listdir(log_dir):
+        if filename.endswith(".log"):
+            file_path = os.path.join(log_dir, filename)
+            file_stats = os.stat(file_path)
+            
+            # Update total size
+            total_size += file_stats.st_size
+            file_count += 1
+            
+            # Update oldest date
+            creation_time = file_stats.st_ctime
+            if oldest_date is None or creation_time < oldest_date:
+                oldest_date = creation_time
+
+    return total_size, file_count, oldest_date
+
+
 def watch_pods_and_archive(namespace, v1, log_dir, logger):
     """
     Watch for pod changes and archive logs when pods are terminated.
@@ -130,6 +160,19 @@ def watch_pods_and_archive(namespace, v1, log_dir, logger):
             for pod in pod_list.items:
                 if pod.metadata.name != os.environ.get("K8S_POD_NAME", "NOT-SET"):
                     archive_pod_logs(v1, namespace, pod.metadata.name, log_dir)
+            
+            # Get log directory statistics from the API endpoint
+            try:
+                response = requests.get("http://localhost:5001/api/logDirStats")
+                if response.status_code == 200:
+                    stats = response.json()
+                    if stats.get("enabled"):
+                        logger.info(
+                            f"Log directory stats - Total size: {stats['total_size_mibytes']:.2f} MiB, "
+                            f"Files: {stats['file_count']}, Oldest file: {stats['oldest_file_date']}"
+                        )
+            except Exception as e:
+                logger.warning(f"Could not fetch log directory stats: {e}")
             
             # Sleep for a while before checking again
             time.sleep(60)  # Check every minute
