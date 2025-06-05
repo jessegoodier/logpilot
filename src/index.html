@@ -235,8 +235,8 @@
                                     <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${stats.log_directory}</p>
                                 </div>
                                 <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
-                                    <button id="purgeLogsButton" class="w-full py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600">
-                                        Purge All Logs
+                                    <button id="purgePreviousLogsButton" class="w-full py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600">
+                                        Purge Previous Pod Logs
                                     </button>
                                 </div>
                             </div>
@@ -260,18 +260,18 @@
 
             // Add event delegation for the purge button
             storageStatsContent.addEventListener('click', async (event) => {
-                if (event.target.id === 'purgeLogsButton') {
-                    if (!confirm('Are you sure you want to delete all log files? This action cannot be undone.')) {
+                if (event.target.id === 'purgePreviousLogsButton') {
+                    if (!confirm('Are you sure you want to delete all previous pod log files? This action cannot be undone.')) {
                         return;
                     }
                     
                     try {
-                        const response = await fetchFromServer('/api/purgeLogs', {
+                        const response = await fetchFromServer('/api/purgePreviousLogs', {
                             method: 'POST'
                         });
                         
                         if (response.success) {
-                            alert(`Successfully purged ${response.deleted_count} log files.`);
+                            alert(`Successfully purged ${response.deleted_count} previous pod log files.`);
                             // Refresh the storage stats
                             updateStorageStats();
                             // Refresh the pod list to update archived pods
@@ -280,7 +280,7 @@
                             alert(`Error: ${response.message}`);
                         }
                     } catch (error) {
-                        alert(`Error purging logs: ${error.message}`);
+                        alert(`Error purging previous pod logs: ${error.message}`);
                     }
                 }
             });

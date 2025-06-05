@@ -210,26 +210,41 @@ def watch_pods_and_archive(namespace, v1, log_dir, logger):
 #         logger.info("Pod log archival watcher thread started.")
 
 
-def purge_all_logs(log_dir, logger):
+def purge_previous_pod_logs(log_dir, logger):
     """
-    Deletes all log files in the specified directory.
+    Deletes only the previous pod log files in the specified directory.
     Returns a tuple of (deleted_count, error_count)
     """
     if not os.path.exists(log_dir):
         logger.warning(f"Log directory {log_dir} does not exist. Nothing to purge.")
         return 0, 0
 
-    logger.info(f"Starting purge of all logs in {log_dir}...")
+    logger.info(f"Starting purge of previous pod logs in {log_dir}...")
     deleted_count = 0
     error_count = 0
+
+    # Get list of current pods
+    try:
+        v1 = client.CoreV1Api()
+        namespace = os.environ.get("K8S_NAMESPACE", "default")
+        pod_list = v1.list_namespaced_pod(namespace=namespace)
+        current_pods = {pod.metadata.name for pod in pod_list.items}
+    except Exception as e:
+        logger.error(f"Error getting current pod list: {e}")
+        return 0, 1
 
     for filename in os.listdir(log_dir):
         if filename.endswith(".log"):  # Process only .log files
             file_path = os.path.join(log_dir, filename)
             try:
-                os.remove(file_path)
-                logger.info(f"Purged log file: {file_path}")
-                deleted_count += 1
+                # Extract pod name from filename (remove .log extension and container name if present)
+                pod_name = filename.split('/')[0] if '/' in filename else filename[:-4]
+                
+                # Only delete if this pod is not in the current pod list
+                if pod_name not in current_pods:
+                    os.remove(file_path)
+                    logger.info(f"Purged previous pod log file: {file_path}")
+                    deleted_count += 1
             except OSError as e:
                 logger.error(f"Error purging file {file_path}: {e}")
                 error_count += 1
@@ -237,5 +252,5 @@ def purge_all_logs(log_dir, logger):
                 logger.error(f"Unexpected error processing file {file_path}: {e}")
                 error_count += 1
 
-    logger.info(f"Log purge finished. Deleted: {deleted_count}, Errors: {error_count}")
+    logger.info(f"Previous pod logs purge finished. Deleted: {deleted_count}, Errors: {error_count}")
     return deleted_count, error_count

@@ -594,11 +594,11 @@ def get_log_dir_stats():
         return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
 
 
-@app.route("/api/purgeLogs", methods=["POST"])
+@app.route("/api/purgePreviousLogs", methods=["POST"])
 @require_api_key
-def purge_logs():
+def purge_previous_logs():
     """
-    API endpoint to purge all log files.
+    API endpoint to purge only previous pod log files.
     Returns a JSON object with the number of files deleted and any errors.
     """
     global LOG_DIR, RETAIN_ALL_POD_LOGS
@@ -610,17 +610,17 @@ def purge_logs():
         }), 403
 
     try:
-        from log_archiver import purge_all_logs
-        deleted_count, error_count = purge_all_logs(LOG_DIR, app.logger)
+        from log_archiver import purge_previous_pod_logs
+        deleted_count, error_count = purge_previous_pod_logs(LOG_DIR, app.logger)
         
         return jsonify({
             "success": True,
             "deleted_count": deleted_count,
             "error_count": error_count,
-            "message": f"Successfully purged {deleted_count} log files. {error_count} errors occurred."
+            "message": f"Successfully purged {deleted_count} previous pod log files. {error_count} errors occurred."
         })
     except Exception as e:
-        app.logger.error(f"Error purging logs: {str(e)}", exc_info=True)
+        app.logger.error(f"Error purging previous pod logs: {str(e)}", exc_info=True)
         return jsonify({
             "success": False,
             "message": f"An unexpected error occurred: {str(e)}"
@@ -629,15 +629,4 @@ def purge_logs():
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    # Instructions to run:
-    # 1. Save the frontend HTML (from the other immersive) as 'index.html' in the same directory as this script.
-    # 2. Install dependencies: pip install Flask kubernetes
-    # 3. Set K8S_NAMESPACE environment variable: export K8S_NAMESPACE="your-target-namespace"
-    #    (or use 'default' namespace if not set)
-    # 4. Run this script: python your_script_name.py
-    # 5. Access in browser: http://localhost:5001 (or your server's IP if host='0.0.0.0')
-
-    # Use host='0.0.0.0' to make the server accessible from other devices on the network.
-    # `debug=True` is useful for development as it enables auto-reloading on code changes and provides debug info.
-    # Do not use `debug=True` in a production environment.
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(host="0.0.0.0", port=5001, debug=False)
