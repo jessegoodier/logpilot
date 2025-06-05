@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: log-gen-script
+data:
+  log-gen.py: |
+    import time
+    import sys
+
+    log_levels = ['info', 'inf', 'wrn', 'warn', 'err', 'error', 'panic']
+    index = 0
+
+    while True:
+        level = log_levels[index]
+        print(f"[{level.upper()}] This is a test log", flush=True)
+        index = (index + 1) % len(log_levels)
+        time.sleep(1)
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-gen-deployment
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: log-gen
+  template:
+    metadata:
+      labels:
+        app: log-gen
+    spec:
+      containers:
+      - name: log-gen
+        image: python:3.13-slim
+        command: ["python", "/app/log-gen.py"]
+        resources: {}
+        volumeMounts:
+        - name: log-gen-script
+          mountPath: /app
+      volumes:
+      - name: log-gen-script
+        configMap:
+          name: log-gen-script
