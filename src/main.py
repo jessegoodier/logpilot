@@ -24,6 +24,22 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("kubernetes").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
+# Add custom filter to prevent logging of /ready endpoint
+class ReadyEndpointFilter(logging.Filter):
+    def filter(self, record):
+        # Check both the message and the args for the /ready endpoint
+        if isinstance(record.msg, str):
+            if 'GET /ready' in record.msg:
+                return False
+        if isinstance(record.args, tuple):
+            for arg in record.args:
+                if isinstance(arg, str) and 'GET /ready' in arg:
+                    return False
+        return True
+
+# Apply filter to both Werkzeug and Flask loggers
+logging.getLogger('werkzeug').addFilter(ReadyEndpointFilter())
+app.logger.addFilter(ReadyEndpointFilter())
 
 # --- Kubernetes Configuration ---
 # This section attempts to configure the Kubernetes client.
@@ -213,6 +229,30 @@ def get_pods():
     except Exception as e:
         app.logger.error(f"Unexpected error fetching pods: {str(e)}")
         return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@app.route("/ready", methods=["GET"])
+def readiness_probe():
+    """
+    Readiness probe endpoint that checks if the /api/pods endpoint is working.
+    Returns 200 if pods can be listed, 503 otherwise.
+    Does not log requests to avoid log spam.
+    """
+    try:
+        # Temporarily disable logging for this check
+        original_level = app.logger.level
+        app.logger.setLevel(logging.ERROR)
+        
+        # Try to list pods
+        v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
+        
+        # Restore logging level
+        app.logger.setLevel(original_level)
+        return "", 200
+    except Exception:
+        # Restore logging level in case of error
+        app.logger.setLevel(original_level)
+        return "", 503
 
 
 @app.route("/api/logs", methods=["GET"])
