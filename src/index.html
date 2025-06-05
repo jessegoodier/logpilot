@@ -272,10 +272,12 @@
                         
                         if (response.success) {
                             alert(`Successfully purged ${response.deleted_count} previous pod log files.`);
-                            // Refresh the storage stats
-                            updateStorageStats();
-                            // Refresh the pod list to update archived pods
-                            fetchPods();
+                            // Close the modal
+                            storageStatsModal.classList.add('hidden');
+                            // Set pod selector to "all"
+                            podSelector.value = "all";
+                            // Refresh the pod list and logs
+                            await fetchPods();
                         } else {
                             alert(`Error: ${response.message}`);
                         }
