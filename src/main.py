@@ -526,6 +526,72 @@ def get_archived_logs():
         return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
 
 
+@app.route("/api/logDirStats", methods=["GET"])
+@require_api_key
+def get_log_dir_stats():
+    """
+    API endpoint to get statistics about the log directory.
+    Returns:
+        - total_size_bytes: Total size of all log files in bytes
+        - file_count: Number of log files
+        - oldest_file_date: Creation date of the oldest log file
+        - enabled: Whether log archiving is enabled
+    """
+    global LOG_DIR, RETAIN_ALL_POD_LOGS
+    
+    if not RETAIN_ALL_POD_LOGS:
+        return jsonify({
+            "enabled": False,
+            "message": "Previous pod logs are not enabled."
+        }), 200
+
+    if not os.path.exists(LOG_DIR):
+        return jsonify({
+            "enabled": True,
+            "total_size_bytes": 0,
+            "file_count": 0,
+            "oldest_file_date": None,
+            "message": "Log directory does not exist."
+        }), 200
+
+    try:
+        total_size = 0
+        file_count = 0
+        oldest_date = None
+
+        for filename in os.listdir(LOG_DIR):
+            if filename.endswith(".log"):
+                file_path = os.path.join(LOG_DIR, filename)
+                file_stats = os.stat(file_path)
+                
+                # Update total size
+                total_size += file_stats.st_size
+                file_count += 1
+                
+                # Update oldest date
+                creation_time = file_stats.st_ctime
+                if oldest_date is None or creation_time < oldest_date:
+                    oldest_date = creation_time
+
+        # Convert oldest_date to ISO format if it exists
+        oldest_date_iso = None
+        if oldest_date is not None:
+            from datetime import datetime
+            oldest_date_iso = datetime.fromtimestamp(oldest_date).isoformat()
+
+        return jsonify({
+            "enabled": True,
+            "total_size_bytes": total_size,
+            "file_count": file_count,
+            "oldest_file_date": oldest_date_iso,
+            "log_directory": LOG_DIR
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error getting log directory stats: {str(e)}", exc_info=True)
+        return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
+
+
 # --- Main Execution ---
 if __name__ == "__main__":
     # Instructions to run:
