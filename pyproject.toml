@@ -1,0 +1,49 @@
+[project]
+name = "kube-web-log-viewer"
+version = "0.1.0"
+description = "A simple Kubernetes log viewer web app"
+requires-python = ">=3.12"
+dependencies = [
+    "flask",
+    "kubernetes",
+    "requests"
+]
+authors = [ {name = "Jesse Goodier", email = "31039225+jessegoodier@users.noreply.github.com"} ]
+
+[project.optional-dependencies]
+dev = [
+    "playwright",
+    "gunicorn",
+    "pytest",
+    "pytest-playwright",
+    "black",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.ruff]
+line-length = 119
+target-version = "py312"
+
+[tool.black]
+line-length = 119
+target-version = [
+  'py312',
+]
+
+# ==== isort ====
+
+[tool.isort]
+profile = "black"
+line_length = 119
+known_first_party = [
+  "tests",
+  "scripts",
+  "hooks",
+]
