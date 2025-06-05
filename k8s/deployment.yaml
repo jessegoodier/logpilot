@@ -62,6 +62,15 @@ spec:
           mountPath: /app
         - name: log-dir
           mountPath: /logs
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 5001
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 1
       volumes:
       - name: log-viewer-config
         configMap:

@@ -5,7 +5,8 @@ description = "A simple Kubernetes log viewer web app"
 requires-python = ">=3.12"
 dependencies = [
     "flask",
-    "kubernetes"
+    "kubernetes",
+    "requests"
 ]
 authors = [ {name = "Jesse Goodier", email = "31039225+jessegoodier@users.noreply.github.com"} ]
 

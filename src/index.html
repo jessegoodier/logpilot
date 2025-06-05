@@ -75,10 +75,21 @@
                         </div>
 
                         <div class="px-4 py-2">
-                            <label for="themeToggle" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Theme</label>
-                            <button id="themeToggle" class="w-full py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600">
-                                Toggle Light/Dark
-                            </button>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Theme</label>
+                            <div class="space-y-2">
+                                <div class="flex items-center">
+                                    <input type="radio" id="themeLight" name="theme" value="light" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600">
+                                    <label for="themeLight" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                                        Light
+                                    </label>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="radio" id="themeDark" name="theme" value="dark" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600">
+                                    <label for="themeDark" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                                        Dark
+                                    </label>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="px-4 py-2">
@@ -114,6 +125,12 @@
                                 </label>
                             </div>
                         </div>
+
+                        <div class="px-4 py-2 border-t border-gray-200 dark:border-gray-700">
+                            <button id="storageStatsButton" class="w-full py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600">
+                                Storage Stats
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -144,6 +161,28 @@
         </main>
     </div>
 
+    <!-- Storage Stats Modal -->
+    <div id="storageStatsModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Storage Statistics</h3>
+                <button id="closeStorageStats" class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                    <span class="sr-only">Close</span>
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div id="storageStatsContent" class="space-y-4">
+                <div class="animate-pulse">
+                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
+                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const podSelector = document.getElementById('podSelector');
@@ -151,7 +190,8 @@
             const numLines = document.getElementById('numLines');
             const timestampType = document.getElementById('timestampType');
             const searchBox = document.getElementById('searchBox');
-            const themeToggle = document.getElementById('themeToggle');
+            const themeLight = document.getElementById('themeLight');
+            const themeDark = document.getElementById('themeDark');
             const logOutput = document.getElementById('logOutput');
             const namespaceValue = document.getElementById('namespaceValue');
             const errorDisplay = document.getElementById('errorDisplay');
@@ -161,31 +201,141 @@
             const settingsButton = document.getElementById('settingsButton');
             const settingsMenu = document.getElementById('settingsMenu');
             const excludeSelf = document.getElementById('excludeSelf');
+            const storageStatsButton = document.getElementById('storageStatsButton');
+            const storageStatsModal = document.getElementById('storageStatsModal');
+            const closeStorageStats = document.getElementById('closeStorageStats');
+            const storageStatsContent = document.getElementById('storageStatsContent');
 
             let currentLogs = [];
-            let currentPodName = null; // Add this to track the current pod name
+            let currentPodName = null;
+
+            // --- Storage Stats Modal ---
+            async function updateStorageStats() {
+                try {
+                    const stats = await fetchFromServer('/api/logDirStats');
+                    let content = '';
+                    
+                    if (stats.enabled) {
+                        content = `
+                            <div class="space-y-4">
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Total Size</h4>
+                                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${stats.total_size_mibytes.toFixed(2)} MiB</p>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Number of Files</h4>
+                                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${stats.file_count}</p>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Oldest File</h4>
+                                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${stats.oldest_file_date || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Log Directory</h4>
+                                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${stats.log_directory}</p>
+                                </div>
+                                <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <button id="purgePreviousLogsButton" class="w-full py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600">
+                                        Purge Previous Pod Logs
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        content = `
+                            <div class="text-center py-4">
+                                <p class="text-gray-700 dark:text-gray-300">${stats.message}</p>
+                            </div>
+                        `;
+                    }
+                    storageStatsContent.innerHTML = content;
+                } catch (error) {
+                    storageStatsContent.innerHTML = `
+                        <div class="text-center py-4">
+                            <p class="text-red-600 dark:text-red-400">Error loading storage stats: ${error.message}</p>
+                        </div>
+                    `;
+                }
+            }
+
+            // Add event delegation for the purge button
+            storageStatsContent.addEventListener('click', async (event) => {
+                if (event.target.id === 'purgePreviousLogsButton') {
+                    if (!confirm('Are you sure you want to delete all previous pod log files? This action cannot be undone.')) {
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetchFromServer('/api/purgePreviousLogs', {
+                            method: 'POST'
+                        });
+                        
+                        if (response.success) {
+                            alert(`Successfully purged ${response.deleted_count} previous pod log files.`);
+                            // Close the modal
+                            storageStatsModal.classList.add('hidden');
+                            // Set pod selector to "all"
+                            podSelector.value = "all";
+                            // Refresh the pod list and logs
+                            await fetchPods();
+                        } else {
+                            alert(`Error: ${response.message}`);
+                        }
+                    } catch (error) {
+                        alert(`Error purging previous pod logs: ${error.message}`);
+                    }
+                }
+            });
+
+            storageStatsButton.addEventListener('click', () => {
+                settingsMenu.classList.add('hidden');
+                storageStatsModal.classList.remove('hidden');
+                updateStorageStats();
+            });
+
+            closeStorageStats.addEventListener('click', () => {
+                storageStatsModal.classList.add('hidden');
+            });
+
+            // Close modal when clicking outside
+            storageStatsModal.addEventListener('click', (event) => {
+                if (event.target === storageStatsModal) {
+                    storageStatsModal.classList.add('hidden');
+                }
+            });
+
+            // Close modal with Escape key
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && !storageStatsModal.classList.contains('hidden')) {
+                    storageStatsModal.classList.add('hidden');
+                }
+            });
 
             // --- Theme Toggle ---
             const applyTheme = () => {
                 if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                     document.documentElement.classList.add('dark');
+                    themeDark.checked = true;
                 } else {
                     document.documentElement.classList.remove('dark');
+                    themeLight.checked = true;
                 }
             };
 
-            themeToggle.addEventListener('click', () => {
-                if (localStorage.theme === 'dark') {
+            themeLight.addEventListener('change', () => {
+                if (themeLight.checked) {
                     localStorage.theme = 'light';
-                    themeToggle.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
-                    themeToggle.classList.add('bg-gray-500', 'hover:bg-gray-600');
-                } else {
-                    localStorage.theme = 'dark';
-                    themeToggle.classList.remove('bg-gray-500', 'hover:bg-gray-600');
-                    themeToggle.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                    applyTheme();
                 }
-                applyTheme();
             });
+
+            themeDark.addEventListener('change', () => {
+                if (themeDark.checked) {
+                    localStorage.theme = 'dark';
+                    applyTheme();
+                }
+            });
+
             applyTheme();
 
             // --- API Calls ---
@@ -430,6 +580,10 @@
                     info: {
                         terms: ['info', 'notice', 'inf'],
                         classes: ['text-green-600', 'dark:text-green-400']
+                    },
+                    debug: {
+                        terms: ['debug', 'dbg', 'trace', 'trc'],
+                        classes: ['text-cyan-600', 'dark:text-cyan-400']
                     }
                 };
 
