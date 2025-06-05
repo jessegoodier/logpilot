@@ -10,6 +10,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Add permissions for PR comments
+permissions:
+  pull-requests: write
+  issues: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -49,13 +54,8 @@ jobs:
           
           # Create a comment with the issues if any
           if [ -s ruff-issues.json ] || [ -s ruff-format.json ]; then
-            echo "RUFF_ISSUES<<EOF" >> $GITHUB_ENV
-            cat ruff-issues.json >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
-            
-            echo "RUFF_FORMAT<<EOF" >> $GITHUB_ENV
-            cat ruff-format.json >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
+            echo "RUFF_ISSUES=$(cat ruff-issues.json)" >> $GITHUB_ENV
+            echo "RUFF_FORMAT=$(cat ruff-format.json)" >> $GITHUB_ENV
           fi
 
       - name: Comment PR with ruff issues
