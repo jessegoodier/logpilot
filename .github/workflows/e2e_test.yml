@@ -5,6 +5,11 @@ on:
     branches:
       - main # Or your default branch
 
+# Add concurrency to cancel in-progress runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -58,8 +63,29 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const issues = JSON.parse(process.env.RUFF_ISSUES || '[]');
-            const format = JSON.parse(process.env.RUFF_FORMAT || '[]');
+            // Debug output
+            console.log('RUFF_ISSUES:', process.env.RUFF_ISSUES);
+            console.log('RUFF_FORMAT:', process.env.RUFF_FORMAT);
+            
+            // Parse with error handling
+            let issues = [];
+            let format = [];
+            
+            try {
+              if (process.env.RUFF_ISSUES) {
+                issues = JSON.parse(process.env.RUFF_ISSUES);
+              }
+            } catch (e) {
+              console.error('Error parsing RUFF_ISSUES:', e);
+            }
+            
+            try {
+              if (process.env.RUFF_FORMAT) {
+                format = JSON.parse(process.env.RUFF_FORMAT);
+              }
+            } catch (e) {
+              console.error('Error parsing RUFF_FORMAT:', e);
+            }
             
             let message = '## Ruff Code Quality Issues\n\n';
             
