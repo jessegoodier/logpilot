@@ -176,7 +176,8 @@ def serve_index():
 def get_pods():
     """
     API endpoint to list pods in the configured Kubernetes namespace.
-    Returns a JSON object with the namespace, a list of pod names (excluding current pod), and the current pod name.
+    Returns a JSON object with the namespace, a list of pod names with their containers,
+    and the current pod name.
     """
     global KUBE_NAMESPACE, KUBE_POD_NAME
     app.logger.info(f"Request for /api/pods in namespace '{KUBE_NAMESPACE}'")
@@ -185,15 +186,24 @@ def get_pods():
 
     try:
         pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
-        if exclude_self:
-            pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
-        else:
-            pod_names = [pod.metadata.name for pod in pod_list_response.items]
-        app.logger.info(f"Found {len(pod_names)} pods in namespace '{KUBE_NAMESPACE}'")
+        pod_info = []
+        for pod in pod_list_response.items:
+            if exclude_self and pod.metadata.name == KUBE_POD_NAME:
+                continue
+            pod_name = pod.metadata.name
+            containers = [container.name for container in pod.spec.containers]
+            if len(containers) == 1:
+                pod_info.append(pod_name)
+            else:
+                # For pods with multiple containers, add each container as pod/container
+                for container in containers:
+                    pod_info.append(f"{pod_name}/{container}")
+        
+        app.logger.info(f"Found {len(pod_info)} pod/container combinations in namespace '{KUBE_NAMESPACE}'")
         return jsonify(
             {
                 "namespace": KUBE_NAMESPACE,
-                "pods": pod_names,
+                "pods": pod_info,
                 "current_pod": KUBE_POD_NAME,
             }
         )
@@ -208,13 +218,13 @@ def get_pods():
 @app.route("/api/logs", methods=["GET"])
 def get_logs():
     """
-    API endpoint to fetch logs for a specific pod or all pods.
+    API endpoint to fetch logs for a specific pod/container or all pods.
     Query Parameters:
-        - pod_name (required): The name of the pod or 'all' for all pods.
+        - pod_name (required): The name of the pod/container (format: 'pod' or 'pod/container') or 'all' for all pods.
         - sort_order (optional, default 'desc'): 'asc' (oldest first) or 'desc' (newest first).
         - tail_lines (optional, default '100'): Number of lines to fetch. '0' means all lines.
         - search_string (optional): String to filter log messages by (case-insensitive).
-    Returns a JSON object with a list of log entries, each with 'timestamp', 'message', and 'pod_name' (if 'all').
+    Returns a JSON object with a list of log entries, each with 'timestamp', 'message', 'pod_name', and 'container_name'.
     """
     global KUBE_NAMESPACE, v1
     pod_name_req = request.args.get("pod_name")
@@ -240,42 +250,46 @@ def get_logs():
     try:
         if pod_name_req == "all":
             pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
-
-            # never show the logger pod
-            pod_names = [pod.metadata.name for pod in pod_list_response.items if pod.metadata.name != KUBE_POD_NAME]
-
-            if not pod_names:
-                return jsonify({"logs": [], "message": "No pods found in the namespace."})
             all_logs = []
-            for p_name_item in pod_names:
-                try:
-                    log_data_stream = v1.read_namespaced_pod_log(
-                        name=p_name_item,
-                        namespace=KUBE_NAMESPACE,
-                        timestamps=True,
-                        tail_lines=tail_lines,
-                        follow=False,
-                        _preload_content=True,
-                    )
-                    raw_log_lines = log_data_stream.splitlines()
-                    for line_str in raw_log_lines:
-                        if not line_str:
-                            continue
-                        log_entry = parse_log_line(line_str)
-                        if search_string and search_string not in log_entry["message"].lower():
-                            continue
-                        log_entry["pod_name"] = p_name_item
-                        all_logs.append(log_entry)
-                except ApiException as e:
-                    app.logger.warning(f"Could not fetch logs for pod {p_name_item}: {e.status} - {e.reason}")
-                    all_logs.append(
-                        {
-                            "pod_name": p_name_item,
-                            "timestamp": None,
-                            "message": f"Error fetching logs: {e.reason}",
-                            "error": True,
-                        }
-                    )
+            
+            for pod in pod_list_response.items:
+                if pod.metadata.name == KUBE_POD_NAME:
+                    continue
+                    
+                pod_name = pod.metadata.name
+                for container in pod.spec.containers:
+                    container_name = container.name
+                    try:
+                        log_data_stream = v1.read_namespaced_pod_log(
+                            name=pod_name,
+                            namespace=KUBE_NAMESPACE,
+                            container=container_name,
+                            timestamps=True,
+                            tail_lines=tail_lines,
+                            follow=False,
+                            _preload_content=True,
+                        )
+                        raw_log_lines = log_data_stream.splitlines()
+                        for line_str in raw_log_lines:
+                            if not line_str:
+                                continue
+                            log_entry = parse_log_line(line_str)
+                            if search_string and search_string not in log_entry["message"].lower():
+                                continue
+                            log_entry["pod_name"] = pod_name
+                            log_entry["container_name"] = container_name
+                            all_logs.append(log_entry)
+                    except ApiException as e:
+                        app.logger.warning(f"Could not fetch logs for pod {pod_name} container {container_name}: {e.status} - {e.reason}")
+                        all_logs.append(
+                            {
+                                "pod_name": pod_name,
+                                "container_name": container_name,
+                                "timestamp": None,
+                                "message": f"Error fetching logs: {e.reason}",
+                                "error": True,
+                            }
+                        )
 
             all_logs.sort(
                 key=lambda x: x.get("timestamp") or "0000-00-00T00:00:00Z",
@@ -289,14 +303,21 @@ def get_logs():
                     all_logs = all_logs[-tail_lines:]
 
             return jsonify({"logs": all_logs})
-        else:  # Single pod
+        else:  # Single pod/container
+            # Split pod_name into pod and container if it contains a slash
+            pod_name = pod_name_req
+            container_name = None
+            if "/" in pod_name_req:
+                pod_name, container_name = pod_name_req.split("/", 1)
+
             log_data_stream = v1.read_namespaced_pod_log(
-                name=pod_name_req,
+                name=pod_name,
                 namespace=KUBE_NAMESPACE,
+                container=container_name,
                 timestamps=True,
                 tail_lines=tail_lines,
                 follow=False,
-                _preload_content=True,  # Ensure content is loaded
+                _preload_content=True,
             )
 
             raw_log_lines = log_data_stream.splitlines()
@@ -307,20 +328,21 @@ def get_logs():
                 log_entry = parse_log_line(line_str)
                 if search_string and search_string not in log_entry["message"].lower():
                     continue
+                log_entry["pod_name"] = pod_name
+                if container_name:
+                    log_entry["container_name"] = container_name
                 processed_logs.append(log_entry)
 
-            # Sort single pod logs by timestamp, consistent with all pods behavior
             processed_logs.sort(
                 key=lambda x: x.get("timestamp") or "0000-00-00T00:00:00Z",
                 reverse=(sort_order == "desc"),
             )
 
-            # Apply tail_lines after sorting
             if tail_lines is not None and tail_lines > 0:
                 if sort_order == "desc":
-                    processed_logs = processed_logs[:tail_lines]  # Take newest N
+                    processed_logs = processed_logs[:tail_lines]
                 else:
-                    processed_logs = processed_logs[-tail_lines:]  # Take oldest N
+                    processed_logs = processed_logs[-tail_lines:]
 
             return jsonify({"logs": processed_logs})
 
@@ -350,7 +372,7 @@ def get_archived_pods():
     """
     API endpoint to list previous pod log files.
     Only active if RETAIN_ALL_POD_LOGS is true.
-    Returns a JSON list of pod names for which previous pod logs exist.
+    Returns a JSON list of pod/container names for which previous pod logs exist.
     """
     global LOG_DIR, RETAIN_ALL_POD_LOGS
     if not RETAIN_ALL_POD_LOGS:
@@ -364,11 +386,11 @@ def get_archived_pods():
         try:
             for filename in os.listdir(LOG_DIR):
                 if filename.endswith(".log"):
-                    # Remove .log extension to get pod name
-                    pod_name = filename[:-4]
-                    if KUBE_POD_NAME not in pod_name:
-                        archived_pod_names.append(pod_name)
-            app.logger.info(f"Found {len(archived_pod_names)} previous pod logs in {LOG_DIR}.")
+                    # Remove .log extension to get pod/container name
+                    pod_container = filename[:-4]
+                    if KUBE_POD_NAME not in pod_container:
+                        archived_pod_names.append(pod_container)
+            app.logger.info(f"Found {len(archived_pod_names)} previous pod/container logs in {LOG_DIR}.")
         except OSError as e:
             app.logger.error(f"Error listing previous pod logs directory {LOG_DIR}: {e}")
             return jsonify({"message": f"Error accessing log archive: {str(e)}"}), 500
@@ -382,9 +404,9 @@ def get_archived_pods():
 @require_api_key
 def get_archived_logs():
     """
-    API endpoint to fetch logs for a specific previous pod log file.
+    API endpoint to fetch logs for a specific previous pod/container log file.
     Query Parameters:
-        - pod_name (required): The name of the pod (filename without .log).
+        - pod_name (required): The name of the pod/container (format: 'pod' or 'pod/container').
         - sort_order (optional, default 'desc'): 'asc' or 'desc'.
         - tail_lines (optional, default '0'): Number of lines. '0' for all.
         - search_string (optional): String to filter log messages.
@@ -413,7 +435,7 @@ def get_archived_logs():
 
     if not os.path.exists(log_file_path):
         app.logger.warning(f"Archived log file not found: {log_file_path}")
-        return jsonify({"message": f"Previous log for pod {pod_name} not found."}), 404
+        return jsonify({"message": f"Previous log for pod/container {pod_name} not found."}), 404
 
     try:
         tail_lines = int(tail_lines_str) if tail_lines_str != "0" else None
@@ -432,35 +454,33 @@ def get_archived_logs():
         for line_str in raw_log_lines:
             if not line_str.strip():
                 continue
-            log_entry = parse_log_line(line_str)  # Re-use existing parser
+            log_entry = parse_log_line(line_str)
             if search_string and search_string not in log_entry["message"].lower():
                 continue
+                
+            # Add pod and container information
+            if "/" in pod_name:
+                pod, container = pod_name.split("/", 1)
+                log_entry["pod_name"] = pod
+                log_entry["container_name"] = container
+            else:
+                log_entry["pod_name"] = pod_name
+                
             processed_logs.append(log_entry)
 
-        app.logger.info(f"{len(processed_logs)} lines after search filter for archived pod '{pod_name}'.")
+        app.logger.info(f"{len(processed_logs)} lines after search filter for archived pod/container '{pod_name}'.")
 
-        # Apply tail_lines after filtering, before sorting if necessary
-        # If tail_lines is specified, we usually want the most recent N lines from the perspective of the file's end.
-        # Since we read all lines, if tail_lines is used, we take the last N of the processed_logs.
-        # The sorting below will then arrange these N lines.
-
-        # Sorting: Logs in files are typically oldest first.
-        # Default behavior: oldest first (asc) from file.
         if sort_order == "desc":  # Newest first
             processed_logs.reverse()
 
-        # Apply tail_lines AFTER sorting to get the correct N lines based on sort order
         if tail_lines is not None and tail_lines > 0:
             processed_logs = processed_logs[:tail_lines]
-            # If sort was asc, tail_lines would take the first N (oldest).
-            # If sort was desc, tail_lines would take the first N (newest).
-            # This behavior is consistent with how `tail` command works on a sorted list.
 
         return jsonify({"logs": processed_logs})
 
     except Exception as e:
         app.logger.error(
-            f"Unexpected error fetching archived logs for pod '{pod_name}': {str(e)}",
+            f"Unexpected error fetching archived logs for pod/container '{pod_name}': {str(e)}",
             exc_info=True,
         )
         return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
