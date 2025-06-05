@@ -39,8 +39,8 @@ jobs:
           # Run ruff check and capture output
           ruff check . --output-format=json > ruff-issues.json || true
           
-          # Run ruff format and capture changes
-          ruff format . --output-format=json > ruff-format.json || true
+          # Run ruff format and capture changes, ensuring valid JSON output
+          ruff format . --output-format=json > ruff-format.json || echo "[]" > ruff-format.json
           
           # Create a comment with the issues if any
           if [ -s ruff-issues.json ] || [ -s ruff-format.json ]; then
