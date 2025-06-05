@@ -24,21 +24,23 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("kubernetes").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
+
 # Add custom filter to prevent logging of /ready endpoint
 class ReadyEndpointFilter(logging.Filter):
     def filter(self, record):
         # Check both the message and the args for the /ready endpoint
         if isinstance(record.msg, str):
-            if 'GET /ready' in record.msg:
+            if "GET /ready" in record.msg:
                 return False
         if isinstance(record.args, tuple):
             for arg in record.args:
-                if isinstance(arg, str) and 'GET /ready' in arg:
+                if isinstance(arg, str) and "GET /ready" in arg:
                     return False
         return True
 
+
 # Apply filter to both Werkzeug and Flask loggers
-logging.getLogger('werkzeug').addFilter(ReadyEndpointFilter())
+logging.getLogger("werkzeug").addFilter(ReadyEndpointFilter())
 app.logger.addFilter(ReadyEndpointFilter())
 
 # --- Kubernetes Configuration ---
@@ -214,7 +216,7 @@ def get_pods():
                 # For pods with multiple containers, add each container as pod/container
                 for container in containers:
                     pod_info.append(f"{pod_name}/{container}")
-        
+
         app.logger.info(f"Found {len(pod_info)} pod/container combinations in namespace '{KUBE_NAMESPACE}'")
         return jsonify(
             {
@@ -242,10 +244,10 @@ def readiness_probe():
         # Temporarily disable logging for this check
         original_level = app.logger.level
         app.logger.setLevel(logging.ERROR)
-        
+
         # Try to list pods
         v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
-        
+
         # Restore logging level
         app.logger.setLevel(original_level)
         return "", 200
@@ -291,11 +293,11 @@ def get_logs():
         if pod_name_req == "all":
             pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
             all_logs = []
-            
+
             for pod in pod_list_response.items:
                 if pod.metadata.name == KUBE_POD_NAME:
                     continue
-                    
+
                 pod_name = pod.metadata.name
                 for container in pod.spec.containers:
                     container_name = container.name
@@ -320,7 +322,9 @@ def get_logs():
                             log_entry["container_name"] = container_name
                             all_logs.append(log_entry)
                     except ApiException as e:
-                        app.logger.warning(f"Could not fetch logs for pod {pod_name} container {container_name}: {e.status} - {e.reason}")
+                        app.logger.warning(
+                            f"Could not fetch logs for pod {pod_name} container {container_name}: {e.status} - {e.reason}"
+                        )
                         all_logs.append(
                             {
                                 "pod_name": pod_name,
@@ -497,7 +501,7 @@ def get_archived_logs():
             log_entry = parse_log_line(line_str)
             if search_string and search_string not in log_entry["message"].lower():
                 continue
-                
+
             # Add pod and container information
             if "/" in pod_name:
                 pod, container = pod_name.split("/", 1)
@@ -505,7 +509,7 @@ def get_archived_logs():
                 log_entry["container_name"] = container
             else:
                 log_entry["pod_name"] = pod_name
-                
+
             processed_logs.append(log_entry)
 
         app.logger.info(f"{len(processed_logs)} lines after search filter for archived pod/container '{pod_name}'.")
@@ -538,21 +542,23 @@ def get_log_dir_stats():
         - enabled: Whether log archiving is enabled
     """
     global LOG_DIR, RETAIN_ALL_POD_LOGS
-    
+
     if not RETAIN_ALL_POD_LOGS:
-        return jsonify({
-            "enabled": False,
-            "message": "Previous pod logs are not enabled."
-        }), 200
+        return jsonify({"enabled": False, "message": "Previous pod logs are not enabled."}), 200
 
     if not os.path.exists(LOG_DIR):
-        return jsonify({
-            "enabled": True,
-            "total_size_mibytes": 0,
-            "file_count": 0,
-            "oldest_file_date": None,
-            "message": "Log directory does not exist."
-        }), 200
+        return (
+            jsonify(
+                {
+                    "enabled": True,
+                    "total_size_mibytes": 0,
+                    "file_count": 0,
+                    "oldest_file_date": None,
+                    "message": "Log directory does not exist.",
+                }
+            ),
+            200,
+        )
 
     try:
         total_size = 0
@@ -565,11 +571,11 @@ def get_log_dir_stats():
                 if filename.endswith(".log"):
                     file_path = os.path.join(root, filename)
                     file_stats = os.stat(file_path)
-                    
+
                     # Update total size
                     total_size += file_stats.st_size
                     file_count += 1
-                    
+
                     # Update oldest date
                     creation_time = file_stats.st_ctime
                     if oldest_date is None or creation_time < oldest_date:
@@ -579,15 +585,18 @@ def get_log_dir_stats():
         oldest_date_iso = None
         if oldest_date is not None:
             from datetime import datetime
+
             oldest_date_iso = datetime.fromtimestamp(oldest_date).isoformat()
 
-        return jsonify({
-            "enabled": True,
-            "total_size_mibytes": total_size/1024/1024,
-            "file_count": file_count,
-            "oldest_file_date": oldest_date_iso,
-            "log_directory": LOG_DIR
-        })
+        return jsonify(
+            {
+                "enabled": True,
+                "total_size_mibytes": total_size / 1024 / 1024,
+                "file_count": file_count,
+                "oldest_file_date": oldest_date_iso,
+                "log_directory": LOG_DIR,
+            }
+        )
 
     except Exception as e:
         app.logger.error(f"Error getting log directory stats: {str(e)}", exc_info=True)
@@ -602,29 +611,26 @@ def purge_previous_logs():
     Returns a JSON object with the number of files deleted and any errors.
     """
     global LOG_DIR, RETAIN_ALL_POD_LOGS
-    
+
     if not RETAIN_ALL_POD_LOGS:
-        return jsonify({
-            "success": False,
-            "message": "Previous pod logs are not enabled."
-        }), 403
+        return jsonify({"success": False, "message": "Previous pod logs are not enabled."}), 403
 
     try:
         from log_archiver import purge_previous_pod_logs
+
         deleted_count, error_count = purge_previous_pod_logs(LOG_DIR, app.logger)
-        
-        return jsonify({
-            "success": True,
-            "deleted_count": deleted_count,
-            "error_count": error_count,
-            "message": f"Successfully purged {deleted_count} previous pod log files. {error_count} errors occurred."
-        })
+
+        return jsonify(
+            {
+                "success": True,
+                "deleted_count": deleted_count,
+                "error_count": error_count,
+                "message": f"Successfully purged {deleted_count} previous pod log files. {error_count} errors occurred.",
+            }
+        )
     except Exception as e:
         app.logger.error(f"Error purging previous pod logs: {str(e)}", exc_info=True)
-        return jsonify({
-            "success": False,
-            "message": f"An unexpected error occurred: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "message": f"An unexpected error occurred: {str(e)}"}), 500
 
 
 # --- Main Execution ---

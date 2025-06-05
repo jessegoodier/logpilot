@@ -2,7 +2,6 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 import threading
-from kubernetes import watch
 from kubernetes.client.rest import ApiException
 import logging
 from kubernetes import client
@@ -120,10 +119,10 @@ def archive_pod_logs(v1, namespace, pod_name, log_dir):
                     filename = f"{pod_name}/{container_name}.log"
                 else:
                     filename = f"{pod_name}.log"
-                    
+
                 log_path = os.path.join(log_dir, filename)
                 os.makedirs(os.path.dirname(log_path), exist_ok=True)
-                
+
                 with open(log_path, "w") as f:
                     f.write(log_data)
                 logging.info(f"Archived logs for pod {pod_name} container {container_name}")
@@ -147,11 +146,11 @@ def get_log_dir_stats(log_dir):
         if filename.endswith(".log"):
             file_path = os.path.join(log_dir, filename)
             file_stats = os.stat(file_path)
-            
+
             # Update total size
             total_size += file_stats.st_size
             file_count += 1
-            
+
             # Update oldest date
             creation_time = file_stats.st_ctime
             if oldest_date is None or creation_time < oldest_date:
@@ -165,17 +164,17 @@ def watch_pods_and_archive(namespace, v1, log_dir, logger):
     Watch for pod changes and archive logs when pods are terminated.
     """
     logger.info(f"Starting pod watcher for namespace {namespace}")
-    
+
     while True:
         try:
             # Get all pods in the namespace
             pod_list = v1.list_namespaced_pod(namespace=namespace)
-            
+
             # Archive logs for each pod
             for pod in pod_list.items:
                 if pod.metadata.name != os.environ.get("K8S_POD_NAME", "NOT-SET"):
                     archive_pod_logs(v1, namespace, pod.metadata.name, log_dir)
-            
+
             # Get log directory statistics from the API endpoint
             try:
                 response = requests.get("http://localhost:5001/api/logDirStats")
@@ -188,10 +187,10 @@ def watch_pods_and_archive(namespace, v1, log_dir, logger):
                         )
             except Exception as e:
                 logger.warning(f"Could not fetch log directory stats: {e}")
-            
+
             # Sleep for a while before checking again
             time.sleep(60)  # Check every minute
-            
+
         except Exception as e:
             logger.error(f"Error in pod watcher: {e}")
             time.sleep(60)  # Wait before retrying
@@ -238,8 +237,8 @@ def purge_previous_pod_logs(log_dir, logger):
             file_path = os.path.join(log_dir, filename)
             try:
                 # Extract pod name from filename (remove .log extension and container name if present)
-                pod_name = filename.split('/')[0] if '/' in filename else filename[:-4]
-                
+                pod_name = filename.split("/")[0] if "/" in filename else filename[:-4]
+
                 # Only delete if this pod is not in the current pod list
                 if pod_name not in current_pods:
                     os.remove(file_path)
