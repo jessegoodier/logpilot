@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="https://raw.githubusercontent.com/jessegoodier/kube-web-log-viewer/refs/heads/main/src/images/favicon.ico">
+    <title>Kubernetes Log Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2d3748; /* dark:gray-700 */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568; /* dark:gray-600 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #718096; /* dark:gray-500 */
+        }
+        .log-line mark { /* For search highlighting */
+            background-color: #f6e05e; /* yellow-300 */
+            color: #2d3748; /* gray-800 */
+            padding: 0.1em;
+            border-radius: 0.2em;
+        }
+        /* Basic transition for theme toggle */
+        body, .bg-gray-100, .bg-gray-800, .text-gray-900, .text-gray-100 {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .loader {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script>
+        // Tailwind dark mode configuration
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans antialiased">
+
+    <div class="container mx-auto px-2 py-2 min-h-screen flex flex-col">
+        <header class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 mb-2 sticky top-0 z-10">
+            <div class="relative">
+                <button id="settingsButton" class="absolute top-0 right-0 p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <img src="https://raw.githubusercontent.com/jessegoodier/kube-web-log-viewer/refs/heads/main/src/images/settings-gear.png" alt="Settings" class="w-5 h-5">
+                </button>
+                <div id="settingsMenu" class="hidden absolute right-0 mt-2 w-64 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-20">
+                    <div class="py-1" role="menu" aria-orientation="vertical">
+                        <div class="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                            <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">Settings</h3>
+                        </div>
+
+                        <div class="px-4 py-2">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Theme</label>
+                            <div class="space-y-2">
+                                <div class="flex items-center">
+                                    <input type="radio" id="themeLight" name="theme" value="light" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600">
+                                    <label for="themeLight" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                                        Light
+                                    </label>
+                                </div>
+                                <div class="flex items-center">
+                                    <input type="radio" id="themeDark" name="theme" value="dark" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600">
+                                    <label for="themeDark" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                                        Dark
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="px-4 py-2">
+                            <label for="sortOrder" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Sort Order</label>
+                            <select id="sortOrder" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="desc">Newest First</option>
+                                <option value="asc">Oldest First</option>
+                            </select>
+                        </div>
+
+                        <div class="px-4 py-2">
+                            <label for="numLines" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Lines per Page</label>
+                            <select id="numLines" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="100">Last 100</option>
+                                <option value="1000">Last 1000</option>
+                                <option value="0">All</option>
+                            </select>
+                        </div>
+
+                        <div class="px-4 py-2">
+                            <label for="timestampType" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Timestamp Format</label>
+                            <select id="timestampType" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                                <option value="since">Time Since</option>
+                                <option value="utc">UTC</option>
+                            </select>
+                        </div>
+
+                        <div class="px-4 py-2">
+                            <div class="flex items-center">
+                                <input type="checkbox" id="excludeSelf" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" checked>
+                                <label for="excludeSelf" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                                    Exclude Self
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="px-4 py-2 border-t border-gray-200 dark:border-gray-700">
+                            <button id="storageStatsButton" class="w-full py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600">
+                                Storage Stats
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end mt-2">
+                <div>
+                    <label for="podSelector" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Pod <a href="#" id="refreshPods" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Refresh)</a></label>
+                    <select id="podSelector" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="all">All Pods</option>
+                    </select>
+                </div>
+
+                <div class="sm:col-span-2">
+                    <label for="searchBox" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Search <a href="#" id="clearSearch" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Clear)</a></label>
+                    <input type="text" id="searchBox" placeholder="Enter to search..." class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                </div>
+            </div>
+            <div id="namespaceDisplay" class="mt-3 text-xs text-gray-500 dark:text-gray-400">Namespace: <span id="namespaceValue">Loading...</span></div>
+            <div id="errorDisplay" class="mt-2 text-sm text-red-600 dark:text-red-400"></div>
+            <div id="loadingIndicator" class="hidden mt-2">
+                <div class="loader"></div>
+                <p class="text-center text-sm text-gray-500 dark:text-gray-400">Loading logs...</p>
+            </div>
+        </header>
+
+        <main class="flex-grow bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 overflow-hidden">
+            <pre id="logOutput" class="whitespace-pre-wrap break-all overflow-auto h-full text-sm leading-relaxed"></pre>
+        </main>
+    </div>
+
+    <!-- Storage Stats Modal -->
+    <div id="storageStatsModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Storage Statistics</h3>
+                <button id="closeStorageStats" class="text-gray-400 hover:text-gray-500 focus:outline-none">
+                    <span class="sr-only">Close</span>
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div id="storageStatsContent" class="space-y-4">
+                <div class="animate-pulse">
+                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2"></div>
+                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
+                    <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const podSelector = document.getElementById('podSelector');
+            const sortOrder = document.getElementById('sortOrder');
+            const numLines = document.getElementById('numLines');
+            const timestampType = document.getElementById('timestampType');
+            const searchBox = document.getElementById('searchBox');
+            const themeLight = document.getElementById('themeLight');
+            const themeDark = document.getElementById('themeDark');
+            const logOutput = document.getElementById('logOutput');
+            const namespaceValue = document.getElementById('namespaceValue');
+            const errorDisplay = document.getElementById('errorDisplay');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const clearSearch = document.getElementById('clearSearch');
+            const refreshPods = document.getElementById('refreshPods');
+            const settingsButton = document.getElementById('settingsButton');
+            const settingsMenu = document.getElementById('settingsMenu');
+            const excludeSelf = document.getElementById('excludeSelf');
+            const storageStatsButton = document.getElementById('storageStatsButton');
+            const storageStatsModal = document.getElementById('storageStatsModal');
+            const closeStorageStats = document.getElementById('closeStorageStats');
+            const storageStatsContent = document.getElementById('storageStatsContent');
+
+            let currentLogs = [];
+            let currentPodName = null;
+
+            // --- Storage Stats Modal ---
+            async function updateStorageStats() {
+                try {
+                    const stats = await fetchFromServer('/api/logDirStats');
+                    let content = '';
+                    
+                    if (stats.enabled) {
+                        content = `
+                            <div class="space-y-4">
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Total Size</h4>
+                                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${stats.total_size_mibytes.toFixed(2)} MiB</p>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Number of Files</h4>
+                                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${stats.file_count}</p>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Oldest File</h4>
+                                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${stats.oldest_file_date || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Log Directory</h4>
+                                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${stats.log_directory}</p>
+                                </div>
+                                <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <button id="purgePreviousLogsButton" class="w-full py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600">
+                                        Purge Previous Pod Logs
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        content = `
+                            <div class="text-center py-4">
+                                <p class="text-gray-700 dark:text-gray-300">${stats.message}</p>
+                            </div>
+                        `;
+                    }
+                    storageStatsContent.innerHTML = content;
+                } catch (error) {
+                    storageStatsContent.innerHTML = `
+                        <div class="text-center py-4">
+                            <p class="text-red-600 dark:text-red-400">Error loading storage stats: ${error.message}</p>
+                        </div>
+                    `;
+                }
+            }
+
+            // Add event delegation for the purge button
+            storageStatsContent.addEventListener('click', async (event) => {
+                if (event.target.id === 'purgePreviousLogsButton') {
+                    if (!confirm('Are you sure you want to delete all previous pod log files? This action cannot be undone.')) {
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetchFromServer('/api/purgePreviousLogs', {
+                            method: 'POST'
+                        });
+                        
+                        if (response.success) {
+                            alert(`Successfully purged ${response.deleted_count} previous pod log files.`);
+                            // Close the modal
+                            storageStatsModal.classList.add('hidden');
+                            // Set pod selector to "all"
+                            podSelector.value = "all";
+                            // Refresh the pod list and logs
+                            await fetchPods();
+                        } else {
+                            alert(`Error: ${response.message}`);
+                        }
+                    } catch (error) {
+                        alert(`Error purging previous pod logs: ${error.message}`);
+                    }
+                }
+            });
+
+            storageStatsButton.addEventListener('click', () => {
+                settingsMenu.classList.add('hidden');
+                storageStatsModal.classList.remove('hidden');
+                updateStorageStats();
+            });
+
+            closeStorageStats.addEventListener('click', () => {
+                storageStatsModal.classList.add('hidden');
+            });
+
+            // Close modal when clicking outside
+            storageStatsModal.addEventListener('click', (event) => {
+                if (event.target === storageStatsModal) {
+                    storageStatsModal.classList.add('hidden');
+                }
+            });
+
+            // Close modal with Escape key
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && !storageStatsModal.classList.contains('hidden')) {
+                    storageStatsModal.classList.add('hidden');
+                }
+            });
+
+            // --- Theme Toggle ---
+            const applyTheme = () => {
+                if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                    themeDark.checked = true;
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    themeLight.checked = true;
+                }
+            };
+
+            themeLight.addEventListener('change', () => {
+                if (themeLight.checked) {
+                    localStorage.theme = 'light';
+                    applyTheme();
+                }
+            });
+
+            themeDark.addEventListener('change', () => {
+                if (themeDark.checked) {
+                    localStorage.theme = 'dark';
+                    applyTheme();
+                }
+            });
+
+            applyTheme();
+
+            // --- API Calls ---
+            async function fetchFromServer(endpoint, options = {}) {
+                errorDisplay.textContent = '';
+                try {
+                    const absoluteUrl = new URL(endpoint, window.location.href).href;
+                    const response = await fetch(absoluteUrl, options);
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: `HTTP error! status: ${response.status} on ${absoluteUrl}` }));
+                        throw new Error(errorData.message || `HTTP error! status: ${response.status} on ${absoluteUrl}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error(`Error fetching ${endpoint} (resolved to ${new URL(endpoint, window.location.href).href}):`, error);
+                    errorDisplay.textContent = `Error: ${error.message}`;
+                    throw error;
+                }
+            }
+
+            async function fetchPods() {
+                try {
+                    // Store current selection before refresh
+                    const currentSelection = podSelector.value;
+                    const currentOption = podSelector.options[podSelector.selectedIndex];
+                    const isCurrentlyArchived = currentOption ? currentOption.dataset.isArchived === "true" : false;
+
+                    // Fetch live pods with exclude_self parameter
+                    const params = new URLSearchParams();
+                    if (excludeSelf.checked) {
+                        params.append('exclude_self', 'true');
+                    }
+                    const livePodsData = await fetchFromServer(`/api/pods?${params.toString()}`);
+                    namespaceValue.textContent = livePodsData.namespace || 'N/A';
+                    currentPodName = livePodsData.current_pod || null; // Store the current pod name
+
+                    // Fetch archived pods
+                    let archivedPodsData = { archived_pods: [] }; // Default empty
+                    try {
+                        // This endpoint might not be available or archival might be disabled
+                        archivedPodsData = await fetchFromServer('/api/archived_pods');
+                    } catch (error) {
+                        console.warn("Could not fetch archived pods, possibly disabled:", error.message);
+                        // Do not display error for this, as it might be an expected state
+                    }
+
+                    podSelector.innerHTML = '<option value="all">All Pods</option>';
+
+                    const createOption = (value, text, isArchived = false) => {
+                        const option = document.createElement('option');
+                        option.value = isArchived ? `archived:${value}` : value;
+                        option.textContent = text;
+                        if (isArchived) {
+                            option.dataset.isArchived = "true";
+                        }
+                        return option;
+                    };
+
+                    let hasLivePods = false;
+                    if (livePodsData.pods && livePodsData.pods.length > 0) {
+                        hasLivePods = true;
+                        const liveGroup = document.createElement('optgroup');
+                        liveGroup.label = "Live Pods";
+
+                        // Create a Set of all pods to ensure uniqueness
+                        const podSet = new Set(livePodsData.pods);
+
+                        // If excludeSelf is unchecked and we have a current pod, add it to the set
+                        if (!excludeSelf.checked && currentPodName) {
+                            podSet.add(currentPodName);
+                        }
+
+                        // Convert Set back to array and sort
+                        const allPods = Array.from(podSet).sort();
+
+                        allPods.forEach(podName => {
+                            liveGroup.appendChild(createOption(podName, podName));
+                        });
+                        podSelector.appendChild(liveGroup);
+                    } else if (!excludeSelf.checked && currentPodName) {
+                        // If no pods from API but we have a current pod and excludeSelf is unchecked
+                        hasLivePods = true;
+                        const liveGroup = document.createElement('optgroup');
+                        liveGroup.label = "Live Pods";
+                        liveGroup.appendChild(createOption(currentPodName, currentPodName));
+                        podSelector.appendChild(liveGroup);
+                    }
+
+                    let hasArchivedPods = false;
+                    if (archivedPodsData.archived_pods && archivedPodsData.archived_pods.length > 0) {
+                        // Filter out archived pods that have matching live pods
+                        const livePodNames = new Set(livePodsData.pods || []);
+                        const filteredArchivedPods = archivedPodsData.archived_pods.filter(
+                            podName => !livePodNames.has(podName)
+                        );
+
+                        if (filteredArchivedPods.length > 0) {
+                            hasArchivedPods = true;
+                            const archivedGroup = document.createElement('optgroup');
+                            archivedGroup.label = "Previous Pods";
+                            filteredArchivedPods.forEach(podName => {
+                                archivedGroup.appendChild(createOption(podName, podName, true));
+                            });
+                            podSelector.appendChild(archivedGroup);
+                        }
+                    }
+
+                    if (!hasLivePods && !hasArchivedPods) {
+                        podSelector.innerHTML = '<option value="all">No pods or previous pods found</option>';
+                    }
+
+                    // Try to restore previous selection
+                    if (currentSelection) {
+                        // Check if the previously selected pod still exists
+                        const optionExists = Array.from(podSelector.options).some(option =>
+                            option.value === currentSelection ||
+                            (isCurrentlyArchived && option.value === `archived:${currentSelection}`)
+                        );
+
+                        if (optionExists) {
+                            podSelector.value = currentSelection;
+                        } else {
+                            // If the previously selected pod no longer exists, default to "all"
+                            podSelector.value = "all";
+                        }
+                    } else {
+                        // If there was no previous selection, default to "all"
+                        podSelector.value = "all";
+                    }
+
+                    // Refresh logs for the current selection
+                    fetchAndDisplayLogs();
+                } catch (error) {
+                    // This catch is mainly for errors from /api/pods now
+                    namespaceValue.textContent = 'Error loading';
+                    errorDisplay.textContent = `Error fetching pod list: ${error.message}`;
+                    podSelector.innerHTML = '<option value="all">Error loading pods</option>';
+                }
+            }
+
+            async function fetchAndDisplayLogs() {
+                const selectedOption = podSelector.options[podSelector.selectedIndex];
+                if (!selectedOption || !selectedOption.value) {
+                    logOutput.textContent = 'Please select a pod to view logs.';
+                    currentLogs = [];
+                    return;
+                }
+
+                const selectedValue = selectedOption.value;
+                const isArchivedLog = selectedOption.dataset.isArchived === "true";
+                const actualPodName = isArchivedLog ? selectedValue.substring("archived:".length) : selectedValue;
+
+                loadingIndicator.classList.remove('hidden');
+                logOutput.textContent = '';
+
+                const params = new URLSearchParams({
+                    pod_name: actualPodName,
+                    sort_order: isArchivedLog ? (sortOrder.value === 'asc' ? 'desc' : 'asc') : sortOrder.value,
+                    tail_lines: numLines.value,
+                    search_string: searchBox.value.trim(),
+                });
+
+                // Add exclude_self parameter if needed
+                if (excludeSelf.checked && currentPodName) {
+                    params.append('exclude_self', currentPodName);
+                }
+
+                const apiEndpoint = isArchivedLog ? '/api/archived_logs' : '/api/logs';
+
+                try {
+                    // Regular fetch for non-following mode (live or archived)
+                    console.log('Fetching logs with params:', params.toString());
+                    const data = await fetchFromServer(`${apiEndpoint}?${params.toString()}`);
+                    console.log('Received log data:', data);
+                    if (!data.logs) {
+                        console.error('No logs array in response:', data);
+                        throw new Error('Invalid response format: missing logs array');
+                    }
+                    currentLogs = data.logs;
+                    console.log('Setting currentLogs, length:', currentLogs.length);
+                    renderLogs();
+                } catch (error) {
+                    console.error('Error in fetchAndDisplayLogs:', error);
+                    currentLogs = [];
+                    errorDisplay.textContent = `Error loading logs: ${error.message}`;
+                    logOutput.textContent = 'Error loading logs. Check console for details.';
+                } finally {
+                    loadingIndicator.classList.add('hidden');
+                }
+            }
+
+            // --- Log Rendering ---
+            function renderLogs() {
+                console.log('Starting renderLogs, currentLogs length:', currentLogs.length);
+                logOutput.innerHTML = '';
+
+                if (!Array.isArray(currentLogs)) {
+                    console.error('currentLogs is not an array:', currentLogs);
+                    errorDisplay.textContent = 'Error: Invalid log data format';
+                    return;
+                }
+
+                if (currentLogs.length === 0) {
+                    logOutput.textContent = 'No logs to display for the current selection.';
+                    if (searchBox.value.trim() && podSelector.value) {
+                         logOutput.textContent += `\nOr no logs match your search term: "${searchBox.value.trim()}"`;
+                    }
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+                const searchTerm = searchBox.value.trim(); // For search highlighting
+
+                // Define pod colors - using a mix of colors that work well in both light and dark modes
+                const podColors = [
+                    ['text-blue-600', 'dark:text-blue-400'],
+                    ['text-purple-600', 'dark:text-purple-400'],
+                    ['text-cyan-600', 'dark:text-cyan-400'],
+                    ['text-emerald-600', 'dark:text-emerald-400'],
+                    ['text-amber-600', 'dark:text-amber-400'],
+                    ['text-rose-600', 'dark:text-rose-400'],
+                    ['text-violet-600', 'dark:text-violet-400'],
+                    ['text-teal-600', 'dark:text-teal-400'],
+                    ['text-orange-600', 'dark:text-orange-400'],
+                    ['text-pink-600', 'dark:text-pink-400']
+                ];
+
+                // Create a map to assign consistent colors to pods
+                const podColorMap = new Map();
+                let colorIndex = 0;
+
+                const logColoringRules = {
+                    error: {
+                        terms: ['error', 'err', 'fatal', 'panic', 'exception', 'critical', 'failed', 'failure'],
+                        classes: ['text-red-600', 'dark:text-red-400', 'font-semibold']
+                    },
+                    warning: {
+                        terms: ['warning', 'warn', 'wrn'],
+                        classes: ['text-orange-500', 'dark:text-orange-400']
+                    },
+                    info: {
+                        terms: ['info', 'notice', 'inf'],
+                        classes: ['text-green-600', 'dark:text-green-400']
+                    },
+                    debug: {
+                        terms: ['debug', 'dbg', 'trace', 'trc'],
+                        classes: ['text-cyan-600', 'dark:text-cyan-400']
+                    }
+                };
+
+                currentLogs.forEach(logEntry => {
+                    const lineDiv = document.createElement('div');
+                    lineDiv.classList.add('log-line', 'py-0.5');
+
+                    // Assign color to pod if viewing all pods
+                    if (podSelector.value === 'all' && logEntry.pod_name) {
+                        if (!podColorMap.has(logEntry.pod_name)) {
+                            podColorMap.set(logEntry.pod_name, podColors[colorIndex % podColors.length]);
+                            colorIndex++;
+                        }
+                        const podColor = podColorMap.get(logEntry.pod_name);
+
+                        const podSpan = document.createElement('span');
+                        podSpan.classList.add('mr-3', 'font-medium', ...podColor);
+                        podSpan.textContent = `[${logEntry.pod_name}] `;
+                        lineDiv.appendChild(podSpan);
+                    }
+
+                    const timestampSpan = document.createElement('span');
+                    timestampSpan.classList.add('mr-3', 'text-gray-500', 'dark:text-gray-400', 'select-none');
+                    timestampSpan.textContent = formatTimestamp(logEntry.timestamp) + ' ';
+
+                    const messageSpan = document.createElement('span');
+                    messageSpan.classList.add('log-message');
+
+                    let messageContent = logEntry.message; // Original message content
+
+                    // Apply keyword coloring first
+                    let coloredMessageContent = messageContent;
+                    const levelsInOrder = ['error', 'warning', 'info']; // Process in this order
+
+                    for (const level of levelsInOrder) {
+                        const rule = logColoringRules[level];
+                        if (rule) {
+                            for (const term of rule.terms) {
+                                // Regex for whole word, case-insensitive
+                                // \b ensures "word boundary"
+                                const termRegex = new RegExp(`\\b(${escapeRegExp(term)})\\b`, 'gi');
+                                coloredMessageContent = coloredMessageContent.replace(termRegex, (match) => {
+                                    return `<span class="${rule.classes.join(' ')}">${match}</span>`;
+                                });
+                            }
+                        }
+                    }
+
+                    // Apply search highlighting on the potentially colorized message
+                    if (searchTerm) {
+                        const searchRegex = new RegExp(`(${escapeRegExp(searchTerm)})`, 'gi');
+                        coloredMessageContent = coloredMessageContent.replace(searchRegex, (match, p1) => {
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = coloredMessageContent;
+                            if (tempDiv.textContent.includes(match)) {
+                                return `<mark>${p1}</mark>`;
+                            }
+                            return match;
+                        });
+                    }
+
+                    messageSpan.innerHTML = coloredMessageContent;
+
+                    lineDiv.appendChild(timestampSpan);
+                    lineDiv.appendChild(messageSpan);
+                    fragment.appendChild(lineDiv);
+                });
+                logOutput.appendChild(fragment);
+            }
+
+            function escapeRegExp(string) {
+                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+
+            // --- Timestamp Formatting ---
+            function formatTimestamp(utcTimestamp) {
+                if (!utcTimestamp) return "[No Timestamp]";
+                const date = new Date(utcTimestamp);
+                if (isNaN(date)) return "[Invalid Date]";
+
+                if (timestampType.value === 'utc') {
+                    return date.toISOString();
+                } else {
+                    return timeSince(date);
+                }
+            }
+
+            function timeSince(date) {
+                const seconds = Math.floor((new Date() - date) / 1000);
+                let interval = seconds / 31536000;
+                if (interval > 1) return Math.floor(interval) + "y ago";
+                interval = seconds / 2592000;
+                if (interval > 1) return Math.floor(interval) + "mo ago";
+                interval = seconds / 86400;
+                if (interval > 1) return Math.floor(interval) + "d ago";
+                interval = seconds / 3600;
+                if (interval > 1) return Math.floor(interval) + "h ago";
+                interval = seconds / 60;
+                if (interval > 1) return Math.floor(interval) + "m ago";
+                if (seconds < 0) return "just now";
+                return Math.max(0, Math.floor(seconds)) + "s ago";
+            }
+
+            // --- Event Listeners ---
+            podSelector.addEventListener('change', () => {
+                logOutput.textContent = '';
+                currentLogs = [];
+                fetchAndDisplayLogs();
+            });
+            sortOrder.addEventListener('change', fetchAndDisplayLogs);
+            numLines.addEventListener('change', fetchAndDisplayLogs);
+            timestampType.addEventListener('change', renderLogs);
+
+            searchBox.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    fetchAndDisplayLogs();
+                }
+            });
+
+            clearSearch.addEventListener('click', (event) => {
+                event.preventDefault();
+                searchBox.value = '';
+                fetchAndDisplayLogs();
+            });
+
+            refreshPods.addEventListener('click', (event) => {
+                event.preventDefault();
+                loadingIndicator.classList.remove('hidden');
+                fetchPods().finally(() => {
+                    loadingIndicator.classList.add('hidden');
+                });
+            });
+
+            // Settings menu toggle
+            settingsButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                settingsMenu.classList.toggle('hidden');
+            });
+
+            // Close settings menu when clicking outside
+            document.addEventListener('click', (event) => {
+                if (!settingsMenu.contains(event.target) && !settingsButton.contains(event.target)) {
+                    settingsMenu.classList.add('hidden');
+                }
+            });
+
+            // Prevent menu from closing when clicking inside it
+            settingsMenu.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+
+            // Add event listener for excludeSelf checkbox
+            excludeSelf.addEventListener('change', () => {
+                loadingIndicator.classList.remove('hidden');
+                fetchPods().finally(() => {
+                    loadingIndicator.classList.add('hidden');
+                });
+            });
+
+            // Initial data fetch
+            fetchPods();
+        });
+    </script>
+</body>
+</html>
