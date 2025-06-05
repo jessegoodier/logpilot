@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-web-log-viewer-deployment
+  # namespace: your-target-namespace
+  labels:
+    app.kubernetes.io/name: kube-web-log-viewer
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kube-web-log-viewer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kube-web-log-viewer
+    spec:
+      serviceAccountName: kube-web-log-viewer-sa
+      terminationGracePeriodSeconds: 2
+      containers:
+      - name: kube-web-log-viewer-container
+        image: python:3.13-slim
+        command: ["/bin/sh", "-c"]
+        args: ["pip install -e /app --break-system-packages && python /app/main.py"]
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5001
+        env:
+        - name: RETAIN_ALL_POD_LOGS
+          value: "true"
+        - name: MAX_LOG_RETENTION_MINUTES
+          value: "10080" # 7 days
+        - name: API_KEY
+          # if the value is "no-key", the server will not require an api key
+          value: "no-key"
+          # to use an api key from a secret, remove the value above and uncomment the following
+          # create the secret with:
+          # kubectl create secret generic log-viewer-api-key --from-literal=api-key=your-api-key
+          # valueFrom:
+          #   secretKeyRef:
+          #     name: log-viewer-api-key
+          #     key: api-key
+        - name: K8S_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: K8S_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "1500m"
+        volumeMounts:
+        - name: log-viewer-config
+          mountPath: /app
+        - name: log-dir
+          mountPath: /logs
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 5001
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 1
+      volumes:
+      - name: log-viewer-config
+        configMap:
+          name: kube-web-log-viewer
+      - name: log-dir
+        # when using emptyDir, the logs are not persisted across pod restarts
+        emptyDir: {}
+        # to use a persistent volume, uncomment the following and comment out the emptyDir
+        # persistentVolumeClaim:
+        #   claimName: log-viewer-pvc
+        # storageClassName: standard # if there is no default storage class, you can specify one here
