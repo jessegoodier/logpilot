@@ -1,0 +1,184 @@
+name: E2E Tests
+
+on:
+  pull_request:
+    branches:
+      - main # Or your default branch
+
+# Add concurrency to cancel in-progress runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Add permissions for PR comments
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s-version:
+          - name: v1.32
+            version: v1.32.3
+        python-version: ['3.12']
+    name: QA tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run ruff checks and propose fixes
+        id: ruff
+        run: |
+          # Run ruff check and capture output
+          ruff check . --output-format=json > ruff-issues.json || true
+          
+          # Run ruff format and capture changes, ensuring valid JSON output
+          ruff format . --output-format=json > ruff-format.json || echo "[]" > ruff-format.json
+          
+          # Create a comment with the issues if any
+          if [ -s ruff-issues.json ] || [ -s ruff-format.json ]; then
+            echo "RUFF_ISSUES=$(cat ruff-issues.json)" >> $GITHUB_ENV
+            echo "RUFF_FORMAT=$(cat ruff-format.json)" >> $GITHUB_ENV
+          fi
+
+      - name: Comment PR with ruff issues
+        if: github.event_name == 'pull_request' && (env.RUFF_ISSUES != '' || env.RUFF_FORMAT != '')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Debug output
+            console.log('RUFF_ISSUES:', process.env.RUFF_ISSUES);
+            console.log('RUFF_FORMAT:', process.env.RUFF_FORMAT);
+            
+            // Parse with error handling
+            let issues = [];
+            let format = [];
+            
+            try {
+              if (process.env.RUFF_ISSUES) {
+                issues = JSON.parse(process.env.RUFF_ISSUES);
+              }
+            } catch (e) {
+              console.error('Error parsing RUFF_ISSUES:', e);
+            }
+            
+            try {
+              if (process.env.RUFF_FORMAT) {
+                format = JSON.parse(process.env.RUFF_FORMAT);
+              }
+            } catch (e) {
+              console.error('Error parsing RUFF_FORMAT:', e);
+            }
+            
+            let message = '## Ruff Code Quality Issues\n\n';
+            
+            if (issues.length > 0) {
+              message += '### Linting Issues\n';
+              issues.forEach(issue => {
+                message += `- ${issue.message} (${issue.filename}:${issue.line})\n`;
+              });
+            }
+            
+            if (format.length > 0) {
+              message += '\n### Formatting Issues\n';
+              format.forEach(change => {
+                message += `- ${change.filename} needs formatting\n`;
+              });
+            }
+            
+            // Only add fix commands if there are actual issues
+            if (issues.length > 0 || format.length > 0) {
+              message += '\n\nTo fix these issues, run:\n```bash\n';
+              if (issues.length > 0) {
+                message += 'ruff check . --fix\n';
+              }
+              if (format.length > 0) {
+                message += 'ruff format .\n';
+              }
+              message += '```';
+            }
+            
+            // Only create comment if there are actual issues
+            if (issues.length > 0 || format.length > 0) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: message
+              });
+            }
+
+      - name: Create KinD cluster
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with:
+          version: v0.20.0
+          node_image: kindest/node:${{ matrix.k8s-version.version }}
+          kubectl_version: ${{ matrix.k8s-version.version }}
+
+      - name: Deploy log-generator test application
+        run: |
+          kubectl create ns log-viewer-testing
+          kubectl -n log-viewer-testing create -f tests/log-gen-deployment.yaml
+
+      - name: Install kube-web-log-viewer
+        run: |
+          kubectl create configmap kube-web-log-viewer \
+            --from-file=src/main.py \
+            --from-file=src/log_archiver.py \
+            --from-file=src/index.html \
+            --from-file=pyproject.toml \
+            -n log-viewer-testing
+          kubectl apply -f k8s/ -n log-viewer-testing
+
+      - name: Wait for ready
+        run: kubectl wait -n log-viewer-testing --for=condition=ready pod --selector app.kubernetes.io/name=kube-web-log-viewer --timeout=120s
+
+      - name: Start port forwarding
+        run: |
+          kubectl port-forward -n log-viewer-testing svc/kube-web-log-viewer-service 5001:5001 --address 0.0.0.0 > /dev/null 2>&1 &
+          echo $! > /tmp/port-forward.pid
+          # Wait for port to be ready
+          timeout 30s bash -c 'until nc -z localhost 5001; do sleep 1; done'
+          echo "Port forwarding is ready"
+
+      - name: Install Playwright browsers
+        run: playwright install --with-deps
+
+      - name: Run Playwright tests
+        run: pytest tests/test_app_playwright.py
+        env:
+          PYTHONPATH: .
+          TEST_BASE_URL: "http://localhost:5001"
+
+      - name: Cleanup port forwarding
+        if: always()
+        run: |
+          if [ -f /tmp/port-forward.pid ]; then
+            kill $(cat /tmp/port-forward.pid) || true
+            rm /tmp/port-forward.pid
+          fi
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots-${{ matrix.python-version }}
+          path: test-results/
+          retention-days: 31
