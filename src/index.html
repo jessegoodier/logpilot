@@ -258,6 +258,33 @@
                 }
             }
 
+            // Add event delegation for the purge button
+            storageStatsContent.addEventListener('click', async (event) => {
+                if (event.target.id === 'purgeLogsButton') {
+                    if (!confirm('Are you sure you want to delete all log files? This action cannot be undone.')) {
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetchFromServer('/api/purgeLogs', {
+                            method: 'POST'
+                        });
+                        
+                        if (response.success) {
+                            alert(`Successfully purged ${response.deleted_count} log files.`);
+                            // Refresh the storage stats
+                            updateStorageStats();
+                            // Refresh the pod list to update archived pods
+                            fetchPods();
+                        } else {
+                            alert(`Error: ${response.message}`);
+                        }
+                    } catch (error) {
+                        alert(`Error purging logs: ${error.message}`);
+                    }
+                }
+            });
+
             storageStatsButton.addEventListener('click', () => {
                 settingsMenu.classList.add('hidden');
                 storageStatsModal.classList.remove('hidden');
@@ -713,33 +740,6 @@
                 fetchPods().finally(() => {
                     loadingIndicator.classList.add('hidden');
                 });
-            });
-
-            // Add purge logs functionality
-            const purgeLogsButton = document.getElementById('purgeLogsButton');
-            
-            purgeLogsButton.addEventListener('click', async () => {
-                if (!confirm('Are you sure you want to delete all log files? This action cannot be undone.')) {
-                    return;
-                }
-                
-                try {
-                    const response = await fetchFromServer('/api/purgeLogs', {
-                        method: 'POST'
-                    });
-                    
-                    if (response.success) {
-                        alert(`Successfully purged ${response.deleted_count} log files.`);
-                        // Refresh the storage stats
-                        updateStorageStats();
-                        // Refresh the pod list to update archived pods
-                        fetchPods();
-                    } else {
-                        alert(`Error: ${response.message}`);
-                    }
-                } catch (error) {
-                    alert(`Error purging logs: ${error.message}`);
-                }
             });
 
             // Initial data fetch
