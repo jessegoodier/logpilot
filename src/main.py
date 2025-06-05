@@ -559,19 +559,21 @@ def get_log_dir_stats():
         file_count = 0
         oldest_date = None
 
-        for filename in os.listdir(LOG_DIR):
-            if filename.endswith(".log"):
-                file_path = os.path.join(LOG_DIR, filename)
-                file_stats = os.stat(file_path)
-                
-                # Update total size
-                total_size += file_stats.st_size
-                file_count += 1
-                
-                # Update oldest date
-                creation_time = file_stats.st_ctime
-                if oldest_date is None or creation_time < oldest_date:
-                    oldest_date = creation_time
+        # Walk through directory recursively
+        for root, _, files in os.walk(LOG_DIR):
+            for filename in files:
+                if filename.endswith(".log"):
+                    file_path = os.path.join(root, filename)
+                    file_stats = os.stat(file_path)
+                    
+                    # Update total size
+                    total_size += file_stats.st_size
+                    file_count += 1
+                    
+                    # Update oldest date
+                    creation_time = file_stats.st_ctime
+                    if oldest_date is None or creation_time < oldest_date:
+                        oldest_date = creation_time
 
         # Convert oldest_date to ISO format if it exists
         oldest_date_iso = None
