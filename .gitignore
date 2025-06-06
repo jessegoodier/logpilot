@@ -177,3 +177,4 @@ build-*.sh
 temp/
 Pip*
 uv.lock
+CLAUDE.md

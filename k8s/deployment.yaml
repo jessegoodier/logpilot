@@ -32,6 +32,8 @@ spec:
           value: "true"
         - name: MAX_LOG_RETENTION_MINUTES
           value: "10080" # 7 days
+        - name: ALLOW_PREVIOUS_LOG_PURGE
+          value: "true" # Set to "false" to disable purge button in the UI
         - name: API_KEY
           # if the value is "no-key", the server will not require an api key
           value: "no-key"
