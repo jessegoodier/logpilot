@@ -1,0 +1,31 @@
+suite: test pvc
+templates:
+  - pvc.yaml
+tests:
+  - it: should not render pvc with emptyDir storage
+    set:
+      storage.type: emptyDir
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: should render pvc with persistentVolume storage
+    set:
+      storage.type: persistentVolume
+      storage.persistentVolume.size: 20Gi
+      storage.persistentVolume.storageClass: "fast-ssd"
+    asserts:
+      - isKind:
+          of: PersistentVolumeClaim
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-web-viewer-pvc
+      - equal:
+          path: spec.resources.requests.storage
+          value: 20Gi
+      - equal:
+          path: spec.storageClassName
+          value: "fast-ssd"
+      - equal:
+          path: spec.accessModes[0]
+          value: ReadWriteOnce

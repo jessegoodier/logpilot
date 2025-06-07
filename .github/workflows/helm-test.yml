@@ -1,0 +1,97 @@
+name: Helm Unit Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+      - '.github/workflows/helm-test.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+      - '.github/workflows/helm-test.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  helm-test:
+    runs-on: ubuntu-latest
+    name: Helm Unit Tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.12.0'
+
+      - name: Install helm-unittest plugin
+        run: |
+          helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.6.2
+
+      - name: Sync source files to chart
+        run: |
+          # Ensure chart src directory exists
+          mkdir -p charts/kube-web-log-viewer/src
+
+          # Copy source files to chart directory
+          cp -r src/* charts/kube-web-log-viewer/src/
+          cp pyproject.toml charts/kube-web-log-viewer/
+
+          # Verify files were copied
+          echo "Files in chart directory:"
+          ls -la charts/kube-web-log-viewer/
+          ls -la charts/kube-web-log-viewer/src/
+
+      - name: Run Helm unit tests
+        run: |
+          helm unittest charts/kube-web-log-viewer
+
+      - name: Lint Helm chart
+        run: |
+          helm lint charts/kube-web-log-viewer
+
+      - name: Template and validate chart
+        run: |
+          # Test with default values
+          helm template test-release charts/kube-web-log-viewer > /tmp/default-output.yaml
+          
+          # Test with custom values
+          cat > /tmp/test-values.yaml << EOF
+          auth:
+            apiKey: "test-key"
+          previousPodLogs:
+            enabled: false
+            retentionMinutes: 1440
+          storage:
+            type: persistentVolume
+            persistentVolume:
+              size: 10Gi
+          ingress:
+            enabled: true
+            hosts:
+              - host: test.example.com
+                paths:
+                  - path: /
+                    pathType: Prefix
+          EOF
+          
+          helm template test-release charts/kube-web-log-viewer -f /tmp/test-values.yaml > /tmp/custom-output.yaml
+          
+          echo "Default values template generated successfully"
+          echo "Custom values template generated successfully"
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-test-results
+          path: |
+            /tmp/*.yaml
+          retention-days: 7

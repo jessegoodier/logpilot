@@ -1,0 +1,82 @@
+suite: test deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: should render deployment with default values
+    asserts:
+      - isKind:
+          of: Deployment
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-web-viewer
+      - equal:
+          path: spec.replicas
+          value: 1
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: "python:3.13-slim"
+      - equal:
+          path: spec.template.spec.containers[0].env[0].name
+          value: "RETAIN_ALL_POD_LOGS"
+      - equal:
+          path: spec.template.spec.containers[0].env[0].value
+          value: "true"
+
+  - it: should render deployment with custom values
+    set:
+      replicaCount: 2
+      image.tag: "3.12-slim"
+      previousPodLogs.enabled: false
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 2
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: "python:3.12-slim"
+      - equal:
+          path: spec.template.spec.containers[0].env[0].value
+          value: "false"
+
+  - it: should use existing secret for API key
+    set:
+      auth.existingSecret: "my-secret"
+      auth.existingSecretKey: "my-key"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[3].valueFrom.secretKeyRef.name
+          value: "my-secret"
+      - equal:
+          path: spec.template.spec.containers[0].env[3].valueFrom.secretKeyRef.key
+          value: "my-key"
+
+  - it: should use direct API key value when no existing secret
+    set:
+      auth.apiKey: "test-key"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[3].value
+          value: "test-key"
+
+  - it: should set resource limits and requests
+    set:
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "200m"
+        limits:
+          memory: "512Mi"
+          cpu: "2000m"
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: "256Mi"
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: "200m"
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: "512Mi"
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+          value: "2000m"
