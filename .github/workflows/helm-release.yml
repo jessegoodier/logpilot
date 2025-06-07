@@ -3,68 +3,93 @@ name: Release Helm Chart
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release"
+        required: true
+        default: "0.1.0"
 
 jobs:
   helm-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Setup Helm
       uses: azure/setup-helm@v3
       with:
         version: '3.12.0'
-        
+
     - name: Create dist directory
       run: mkdir -p dist
-      
+
     - name: Sync source files to chart
       run: |
         # Ensure chart src directory exists
         mkdir -p charts/kube-web-log-viewer/src
-        
+
         # Copy source files to chart directory
         cp -r src/* charts/kube-web-log-viewer/src/
         cp pyproject.toml charts/kube-web-log-viewer/
-        
+
         # Verify files were copied
         echo "Files in chart directory:"
         ls -la charts/kube-web-log-viewer/
         ls -la charts/kube-web-log-viewer/src/
-        
+
     - name: Update chart version
       run: |
         # Extract version from release tag (remove 'v' prefix if present)
         VERSION=${GITHUB_REF_NAME#v}
         echo "Setting chart version to: $VERSION"
-        
+
         # Update Chart.yaml with release version
         sed -i "s/^version:.*/version: $VERSION/" charts/kube-web-log-viewer/Chart.yaml
         sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/kube-web-log-viewer/Chart.yaml
-        
+
         # Show updated Chart.yaml
         cat charts/kube-web-log-viewer/Chart.yaml
-        
+
     - name: Package Helm chart
       run: |
         helm package charts/kube-web-log-viewer --destination dist/
         echo "Packaged charts:"
         ls -la dist/
-        
+
     - name: Generate Helm repository index
       run: |
         helm repo index dist/ --url https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/
         echo "Generated index.yaml:"
         cat dist/index.yaml
-        
+
     - name: Upload chart assets to release
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          dist/*.tgz
-          dist/index.yaml
+        files: dist/*.tgz
         generate_release_notes: true
+
+    - name: Setup Git for gh-pages
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+
+    - name: Deploy to gh-pages
+      run: |
+        # Create gh-pages branch if it doesn't exist
+        git checkout --orphan gh-pages || git checkout gh-pages
+
+        # Remove all files except .git
+        git rm -rf .
+
+        # Copy index.yaml to root
+        cp dist/index.yaml .
+
+        # Commit and push
+        git add index.yaml
+        git commit -m "Update index.yaml for version ${{ github.ref_name }}"
+        git push origin gh-pages
