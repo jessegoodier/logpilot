@@ -23,6 +23,10 @@ jobs:
       with:
         version: '3.12.0'
 
+    - name: Install helm-unittest plugin
+      run: |
+        helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.6.2
+
     - name: Create dist directory
       run: mkdir -p dist
 
@@ -40,17 +44,46 @@ jobs:
         ls -la charts/kube-web-log-viewer/
         ls -la charts/kube-web-log-viewer/src/
 
-    - name: Update chart version
+    - name: Update all version references
       run: |
         VERSION="${{ github.event.inputs.version }}"
-        echo "Setting chart version to: $VERSION"
+        echo "Setting version to: $VERSION across all files"
 
         # Update Chart.yaml with release version
         sed -i "s/^version:.*/version: $VERSION/" charts/kube-web-log-viewer/Chart.yaml
         sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/kube-web-log-viewer/Chart.yaml
 
-        # Show updated Chart.yaml
+        # Update pyproject.toml files
+        sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
+        sed -i "s/^version = .*/version = \"$VERSION\"/" charts/kube-web-log-viewer/pyproject.toml
+
+        # Update __init__.py files
+        sed -i "s/^__version__ = .*/__version__ = \"$VERSION\"/" src/__init__.py
+        sed -i "s/^__version__ = .*/__version__ = \"$VERSION\"/" charts/kube-web-log-viewer/src/__init__.py
+
+        # Show updated files
+        echo "=== Updated Chart.yaml ==="
         cat charts/kube-web-log-viewer/Chart.yaml
+        echo "=== Updated pyproject.toml ==="
+        grep "version = " pyproject.toml
+        echo "=== Updated charts/pyproject.toml ==="
+        grep "version = " charts/kube-web-log-viewer/pyproject.toml
+        echo "=== Updated src/__init__.py ==="
+        grep "__version__" src/__init__.py
+        echo "=== Updated charts/src/__init__.py ==="
+        grep "__version__" charts/kube-web-log-viewer/src/__init__.py
+
+    - name: Run Helm tests before packaging
+      run: |
+        echo "Running Helm unit tests..."
+        helm unittest charts/kube-web-log-viewer
+        
+        echo "Running Helm lint..."
+        helm lint charts/kube-web-log-viewer
+        
+        echo "Testing template generation..."
+        helm template test-release charts/kube-web-log-viewer > /dev/null
+        echo "All Helm tests passed!"
 
     - name: Package Helm chart
       run: |
