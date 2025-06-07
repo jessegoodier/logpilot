@@ -44,8 +44,12 @@ jobs:
 
     - name: Update chart version
       run: |
-        # Extract version from release tag (remove 'v' prefix if present)
-        VERSION=${GITHUB_REF_NAME#v}
+        # Get version from release tag or workflow input
+        if [[ "${{ github.event_name }}" == "release" ]]; then
+          VERSION=${GITHUB_REF_NAME#v}
+        else
+          VERSION="${{ github.event.inputs.version }}"
+        fi
         echo "Setting chart version to: $VERSION"
 
         # Update Chart.yaml with release version
