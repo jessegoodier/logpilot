@@ -70,6 +70,7 @@ app.logger.info(f"Targeting Kubernetes namespace: {KUBE_NAMESPACE}")
 # --- Log Archival Configuration ---
 RETAIN_ALL_POD_LOGS = os.environ.get("RETAIN_ALL_POD_LOGS", "false").lower() == "true"
 MAX_LOG_RETENTION_MINUTES = int(os.environ.get("MAX_LOG_RETENTION_MINUTES", "10080"))  # Default 7 days
+ALLOW_PREVIOUS_LOG_PURGE = os.environ.get("ALLOW_PREVIOUS_LOG_PURGE", "true").lower() == "true"
 LOG_DIR = "/logs"
 
 if RETAIN_ALL_POD_LOGS:
@@ -416,9 +417,10 @@ def get_archived_pods():
     """
     API endpoint to list previous pod log files.
     Only active if RETAIN_ALL_POD_LOGS is true.
-    Returns a JSON list of pod/container names for which previous pod logs exist.
+    Returns a JSON list of pod/container names for which previous pod logs exist
+    but are no longer running.
     """
-    global LOG_DIR, RETAIN_ALL_POD_LOGS
+    global LOG_DIR, RETAIN_ALL_POD_LOGS, KUBE_NAMESPACE, v1
     if not RETAIN_ALL_POD_LOGS:
         return (
             jsonify({"archived_pods": [], "message": "Previous pod logs are not enabled."}),
@@ -428,13 +430,36 @@ def get_archived_pods():
     archived_pod_names = []
     if os.path.exists(LOG_DIR):
         try:
+            # Get list of currently running pods to exclude from archived list
+            running_pod_containers = set()
+            try:
+                pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
+                for pod in pod_list_response.items:
+                    pod_name = pod.metadata.name
+                    containers = [container.name for container in pod.spec.containers]
+                    if len(containers) == 1:
+                        running_pod_containers.add(pod_name)
+                    else:
+                        # For pods with multiple containers, add each container as pod/container
+                        for container in containers:
+                            running_pod_containers.add(f"{pod_name}/{container}")
+                app.logger.info(f"Found {len(running_pod_containers)} currently running pod/container combinations.")
+            except ApiException as e:
+                app.logger.warning(f"Could not fetch running pods for archived filter: {e.status} - {e.reason}")
+                # Continue with empty set - this will show all archived pods if we can't fetch running ones
+                running_pod_containers = set()
+
+            # List archived log files and exclude currently running pods
             for filename in os.listdir(LOG_DIR):
                 if filename.endswith(".log"):
                     # Remove .log extension to get pod/container name
                     pod_container = filename[:-4]
-                    if KUBE_POD_NAME not in pod_container:
+                    # Exclude current pod and any currently running pods
+                    if (KUBE_POD_NAME not in pod_container and 
+                        pod_container not in running_pod_containers):
                         archived_pod_names.append(pod_container)
-            app.logger.info(f"Found {len(archived_pod_names)} previous pod/container logs in {LOG_DIR}.")
+            
+            app.logger.info(f"Found {len(archived_pod_names)} previous (non-running) pod/container logs in {LOG_DIR}.")
         except OSError as e:
             app.logger.error(f"Error listing previous pod logs directory {LOG_DIR}: {e}")
             return jsonify({"message": f"Error accessing log archive: {str(e)}"}), 500
@@ -603,6 +628,22 @@ def get_log_dir_stats():
         return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
 
 
+@app.route("/api/purgeCapability", methods=["GET"])
+@require_api_key
+def get_purge_capability():
+    """
+    API endpoint to check if previous log purging is allowed.
+    Returns a JSON object indicating if purge functionality is available.
+    """
+    global RETAIN_ALL_POD_LOGS, ALLOW_PREVIOUS_LOG_PURGE
+
+    return jsonify({
+        "purge_allowed": RETAIN_ALL_POD_LOGS and ALLOW_PREVIOUS_LOG_PURGE,
+        "logs_enabled": RETAIN_ALL_POD_LOGS,
+        "purge_enabled": ALLOW_PREVIOUS_LOG_PURGE
+    })
+
+
 @app.route("/api/purgePreviousLogs", methods=["POST"])
 @require_api_key
 def purge_previous_logs():
@@ -610,10 +651,13 @@ def purge_previous_logs():
     API endpoint to purge only previous pod log files.
     Returns a JSON object with the number of files deleted and any errors.
     """
-    global LOG_DIR, RETAIN_ALL_POD_LOGS
+    global LOG_DIR, RETAIN_ALL_POD_LOGS, ALLOW_PREVIOUS_LOG_PURGE
 
     if not RETAIN_ALL_POD_LOGS:
         return jsonify({"success": False, "message": "Previous pod logs are not enabled."}), 403
+
+    if not ALLOW_PREVIOUS_LOG_PURGE:
+        return jsonify({"success": False, "message": "Previous log purging is not allowed."}), 403
 
     try:
         from log_archiver import purge_previous_pod_logs
