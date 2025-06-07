@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kube-web-log-viewer.fullname" . }}-config
+  labels:
+    {{- include "kube-web-log-viewer.labels" . | nindent 4 }}
+  annotations:
+    checksum/config: {{ include "kube-web-log-viewer.configMapChecksum" . }}
+data:
+  main.py: |
+{{ .Files.Get "src/main.py" | indent 4 }}
+  log_archiver.py: |
+{{ .Files.Get "src/log_archiver.py" | indent 4 }}
+  index.html: |
+{{ .Files.Get "src/index.html" | indent 4 }}
+  pyproject.toml: |
+{{ .Files.Get "pyproject.toml" | indent 4 }}

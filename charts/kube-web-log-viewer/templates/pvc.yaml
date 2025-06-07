@@ -1,0 +1,23 @@
+{{- if eq .Values.storage.type "persistentVolume" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "kube-web-log-viewer.fullname" . }}-pvc
+  labels:
+    {{- include "kube-web-log-viewer.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- range .Values.storage.persistentVolume.accessModes }}
+    - {{ . | quote }}
+    {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.persistentVolume.size | quote }}
+  {{- if .Values.storage.persistentVolume.storageClass }}
+  {{- if (eq "-" .Values.storage.persistentVolume.storageClass) }}
+  storageClassName: ""
+  {{- else }}
+  storageClassName: {{ .Values.storage.persistentVolume.storageClass | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}
