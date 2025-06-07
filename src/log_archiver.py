@@ -195,20 +195,6 @@ def watch_pods_and_archive(namespace, v1, log_dir, logger):
             logger.error(f"Error in pod watcher: {e}")
             time.sleep(60)  # Wait before retrying
 
-
-# Placeholder for the main function in app.py to start this watcher
-# def start_pod_log_archival_watcher(namespace, v1_api, log_dir, logger):
-#     if RETAIN_ALL_POD_LOGS_FROM_APP_CONTEXT:
-#         thread = threading.Thread(
-#             target=watch_pods_and_archive,
-#             args=(namespace, v1_api, log_dir, logger),
-#             daemon=True
-#         )
-#         thread.name = "PodLogArchiverMainWatcher"
-#         thread.start()
-#         logger.info("Pod log archival watcher thread started.")
-
-
 def purge_previous_pod_logs(log_dir, logger):
     """
     Deletes only the previous pod log files in the specified directory.

@@ -7,10 +7,10 @@
 {{- end }}
 
 2. Configuration:
-   - Log archival: {{ if .Values.logArchival.enabled }}ENABLED{{ else }}DISABLED{{ end }}
-   {{- if .Values.logArchival.enabled }}
-   - Log retention: {{ .Values.logArchival.retentionMinutes }} minutes ({{ div .Values.logArchival.retentionMinutes 1440 }} days)
-   - Purge capability: {{ if .Values.logArchival.allowPurge }}ENABLED{{ else }}DISABLED{{ end }}
+   - Log archival: {{ if .Values.previousPodLogs.enabled }}ENABLED{{ else }}DISABLED{{ end }}
+   {{- if .Values.previousPodLogs.enabled }}
+   - Log retention: {{ .Values.previousPodLogs.retentionMinutes }} minutes ({{ div .Values.previousPodLogs.retentionMinutes 1440 }} days)
+   - Purge capability: {{ if .Values.previousPodLogs.allowPurge }}ENABLED{{ else }}DISABLED{{ end }}
    {{- end }}
    - API authentication: {{ if and .Values.auth.apiKey (ne .Values.auth.apiKey "no-key") }}ENABLED{{ else }}DISABLED{{ end }}
    {{- if and .Values.auth.apiKey (ne .Values.auth.apiKey "no-key") }}

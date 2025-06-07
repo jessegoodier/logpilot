@@ -15,18 +15,22 @@ This application is explicity designed to only monitor logs of pods in the names
 The name of the chart is web-viewer. The recommended release name is `<namespace>-log`
 
 If you use this naming, the command:
-`helm install kube-system-log ./charts/kube-web-log-viewer -n kube-system`
+```sh
+helm install kube-system-log \
+  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer \
+  -n kube-system
+```
 
 Will result in a Deployment named:
 
 `kube-system-log-web-viewer`
 
-Use default values:
+Install using the default values:
 
 ```sh
 # Install with default settings
 helm install NAMESPACE-log \
-  --repo
+  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer
 ```
 
 Disable retaining logs of pods that have been killed.:
@@ -93,7 +97,7 @@ Create a `custom-values.yaml` file:
 auth:
   apiKey: "my-secure-api-key"
 
-logArchival:
+previousPodLogs:
   enabled: true
   retentionMinutes: 20160  # 14 days
   allowPurge: false
@@ -130,7 +134,7 @@ Then install with:
 
 ```bash
 helm install kube-web-log-viewer ./charts/kube-web-log-viewer \
-  --repo \
+  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer \
   -f custom-values.yaml
 ```
 
