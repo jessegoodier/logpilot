@@ -4,9 +4,7 @@ Helm chart for deploying the Kubernetes Web Log Viewer - a simple Kubernetes pod
 
 Give direct log access to your software engineers to see the logs without giving them access to the kubeconfig or other centralized log tools.
 
-This application is explicity designed to only monitor logs of pods in the namespace it is deployed to. It can be easily adapted to view all pods in the cluster- but it may not scale well in larger environments.
-
-![screenshot](kube-web-log-viewer.png)
+This application is designed to only monitor logs of pods in the namespace it is deployed to.
 
 ## Installation
 

@@ -4,7 +4,7 @@ A simple Kubernetes pod log viewer web app.
 
 Give direct log access to your software engineers to see the logs without giving them access to the kubeconfig or other centralized log tools.
 
-This application is explicity designed to only monitor logs of pods in the namespace it is deployed to. It can be easily adapted to view all pods in the cluster- but it may not scale well in larger environments.
+This application is explicitly designed to only monitor logs of pods in the namespace it is deployed to. It can be easily adapted to view all pods in the cluster, but it may not scale well in larger environments.
 
 ![screenshot](kube-web-log-viewer.png)
 
@@ -38,9 +38,15 @@ This application is explicity designed to only monitor logs of pods in the names
 
 ## Deploying
 
-1. Modify [the app config](k8s/deployment.yaml). See comments on the API key usage
-2. Create the configmap:
+### Option 1: Helm Chart (Recommended)
 
+Helm allows you to easily install and customize the settings settings.
+
+See the [readme](charts/README.md) in the helm chart for instructions.
+
+### Option 2: Raw Kubernetes Manifests
+
+1. Create the configmap:
     ```sh
     kubectl create configmap kube-web-log-viewer \
       --from-file=src/main.py \
@@ -50,21 +56,22 @@ This application is explicity designed to only monitor logs of pods in the names
       -n YOUR_NAMESPACE
     ```
 
-3. Apply the main manifest:
+2. Apply the main manifest:
+Modify [the app config](k8s/deployment.yaml). See comments on the API key usage.
 
     ```sh
     kubectl apply -f k8s/ -n YOUR_NAMESPACE
     ```
 
-4. Port-forward to the service:
+3. Port-forward to the service:
 
     ```sh
     kubectl port-forward -n YOUR_NAMESPACE svc/kube-web-log-viewer-service 5001:5001
     ```
 
-The API key is desinged to simply protect the UI from random users. Please use a VPN or other means to protect the app in sensitive environments. Happy to accept PRs to add more security.
+The API key is designed to simply protect the UI from random users. Please use a VPN or other means to protect the app in sensitive environments.
 
-When using an API key, you embed the key in the URL. You can access the app at `http://localhost:5001/api_key=your-api-key`
+When using an API key, you embed the key in the URL: `http://localhost:5001/?api_key=your-api-key`
 
 ### Previous Pod Logs
 
@@ -89,7 +96,7 @@ We welcome contributions! Please follow these guidelines when submitting a Pull 
 
 1. Fork the repository and create your feature branch (`git checkout -b feature/amazing-feature`)
 2. Make your changes
-3. Test your changes, consider using the [test-pod.yaml](tests/test-pod.yaml) to test the app
+3. Test your changes, consider using the [log-gen-deployment.yaml](tests/log-gen-deployment.yaml) to test the app
    1. Feel free to make better tests
 4. Run code formatting and linting:
    ```sh
