@@ -38,7 +38,7 @@ Disable retaining logs of pods that have been killed.:
 ```sh
 # Install with custom values
 helm install kube-web-log-viewer \
-  ./charts/kube-web-log-viewer \
+  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer \
   --set previousPodLogs.enabled=false
 ```
 
@@ -46,7 +46,8 @@ Persist logs on restart:
 
 ```sh
 # Install with persistent storage
-helm install kube-web-log-viewer ./charts/kube-web-log-viewer -n log-viewer --create-namespace \
+helm install kube-web-log-viewer \
+  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer \
   --set storage.type=persistentVolume \
   --set storage.persistentVolume.size=10Gi
 ```
