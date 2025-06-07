@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g. 0.2.1)"
+        description: "Version to release (e.g. 0.3.0)"
         required: true
-        default: "0.1.0"
+        default: "0.3.0"
 
 jobs:
   helm-release:
@@ -47,31 +47,16 @@ jobs:
     - name: Update all version references
       run: |
         VERSION="${{ github.event.inputs.version }}"
-        echo "Setting version to: $VERSION across all files"
+        echo "Setting version to: $VERSION across all files using update script"
 
-        # Update Chart.yaml with release version
-        sed -i "s/^version:.*/version: $VERSION/" charts/kube-web-log-viewer/Chart.yaml
-        sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" charts/kube-web-log-viewer/Chart.yaml
+        # Make the update script executable and run it
+        chmod +x scripts/update-versions.sh
+        ./scripts/update-versions.sh "$VERSION"
 
-        # Update pyproject.toml files
-        sed -i "s/^version = .*/version = \"$VERSION\"/" pyproject.toml
-        sed -i "s/^version = .*/version = \"$VERSION\"/" charts/kube-web-log-viewer/pyproject.toml
-
-        # Update __init__.py files
-        sed -i "s/^__version__ = .*/__version__ = \"$VERSION\"/" src/__init__.py
-        sed -i "s/^__version__ = .*/__version__ = \"$VERSION\"/" charts/kube-web-log-viewer/src/__init__.py
-
-        # Show updated files
-        echo "=== Updated Chart.yaml ==="
-        cat charts/kube-web-log-viewer/Chart.yaml
-        echo "=== Updated pyproject.toml ==="
-        grep "version = " pyproject.toml
-        echo "=== Updated charts/pyproject.toml ==="
-        grep "version = " charts/kube-web-log-viewer/pyproject.toml
-        echo "=== Updated src/__init__.py ==="
-        grep "__version__" src/__init__.py
-        echo "=== Updated charts/src/__init__.py ==="
-        grep "__version__" charts/kube-web-log-viewer/src/__init__.py
+        # Show git diff to see what changed
+        echo ""
+        echo "=== Git diff showing version changes ==="
+        git diff --no-index /dev/null . | grep -E "^\+.*version|^\+.*__version__|^\+.*appVersion" || echo "No version changes detected in diff"
 
     - name: Run Helm tests before packaging
       run: |
