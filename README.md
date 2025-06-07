@@ -1,10 +1,10 @@
 # Kube Web Log Viewer<!-- omit in toc -->
 
-A simple Kubernetes log viewer web app. View logs from pods in your cluster with a simple web UI.
+A simple Kubernetes pod log viewer web app.
 
-This application is explicity designed to only monitor logs from pods in the namespace it is deployed to.
+Give direct log access to your software engineers to see the logs without giving them access to the kubeconfig or other centralized log tools.
 
-It was created to help engineers to be able to monitor the logs of their pods in a namespace without having access to the cluster.
+This application is explicity designed to only monitor logs of pods in the namespace it is deployed to. It can be easily adapted to view all pods in the cluster- but it may not scale well in larger environments.
 
 ![screenshot](kube-web-log-viewer.png)
 
