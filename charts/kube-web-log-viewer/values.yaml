@@ -8,7 +8,7 @@ auth:
 
 # Previous pod logs configuration
 previousPodLogs:
-  # Enable/disable storingprevious pod logs
+  # Enable/disable storing previous pod logs
   enabled: true
   # Log retention period in minutes (default: 7 days)
   retentionMinutes: 10080

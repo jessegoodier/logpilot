@@ -8,7 +8,7 @@ This application is designed to only monitor logs of pods in the namespace it is
 
 ## Installation
 
-## Install from web
+### Install from web
 
 The name of the chart is web-viewer. The recommended release name is `<namespace>-log`
 
@@ -31,7 +31,7 @@ helm install NAMESPACE-log \
   --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer
 ```
 
-Disable retaining logs of pods that have been killed.:
+Disable retaining logs of pods that have been terminated:
 
 ```sh
 # Install with custom values
@@ -132,7 +132,7 @@ resources:
 Then install with:
 
 ```bash
-helm install kube-web-log-viewer ./charts/kube-web-log-viewer \
+helm install kube-web-log-viewer \
   --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer \
   -f custom-values.yaml
 ```

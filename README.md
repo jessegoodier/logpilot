@@ -22,7 +22,6 @@ This application is explicitly designed to only monitor logs of pods in the name
 - List pods in a namespace
 - View and search logs from selected pods
 - Sort logs (newest/oldest first)
-- Follow logs (auto-refresh)
 - Automatically select pod if only one is running
 - Highlight log levels (error, warning, info)
 - Light/dark theme toggle
@@ -40,7 +39,7 @@ This application is explicitly designed to only monitor logs of pods in the name
 
 ### Option 1: Helm Chart (Recommended)
 
-Helm allows you to easily install and customize the settings settings.
+Helm allows you to easily install and customize the settings.
 
 See the [readme](charts/README.md) in the helm chart for instructions.
 
