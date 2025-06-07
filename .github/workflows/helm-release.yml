@@ -1,12 +1,10 @@
 name: Release Helm Chart
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release"
+        description: "Version to release (e.g. 0.2.1)"
         required: true
         default: "0.1.0"
 
@@ -44,12 +42,7 @@ jobs:
 
     - name: Update chart version
       run: |
-        # Get version from release tag or workflow input
-        if [[ "${{ github.event_name }}" == "release" ]]; then
-          VERSION=${GITHUB_REF_NAME#v}
-        else
-          VERSION="${{ github.event.inputs.version }}"
-        fi
+        VERSION="${{ github.event.inputs.version }}"
         echo "Setting chart version to: $VERSION"
 
         # Update Chart.yaml with release version
@@ -67,13 +60,15 @@ jobs:
 
     - name: Generate Helm repository index
       run: |
-        helm repo index dist/ --url https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/
+        helm repo index dist/ --url https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/
         echo "Generated index.yaml:"
         cat dist/index.yaml
 
-    - name: Upload chart assets to release
+    - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: v${{ github.event.inputs.version }}
+        name: Release v${{ github.event.inputs.version }}
         files: dist/*.tgz
         generate_release_notes: true
 
@@ -95,5 +90,5 @@ jobs:
 
         # Commit and push
         git add index.yaml
-        git commit -m "Update index.yaml for version ${{ github.ref_name }}"
+        git commit -m "Update index.yaml for version v${{ github.event.inputs.version }}"
         git push origin gh-pages
