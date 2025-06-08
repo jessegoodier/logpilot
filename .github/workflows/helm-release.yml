@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release (e.g. 0.3.0)"
+        description: "Version to release (e.g. 0.3.2 for patch, 0.4.0 for minor)"
         required: true
-        default: "0.3.0"
+        default: "0.3.2"
 
 jobs:
   helm-release:
@@ -17,6 +17,43 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Calculate suggested next version
+      id: next-version
+      run: |
+        echo "Calculating suggested next version..."
+        
+        # Get the latest release version from GitHub API
+        LATEST_RELEASE=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r '.tag_name // "v0.0.0"' | sed 's/^v//')
+        echo "Latest released version: $LATEST_RELEASE"
+        
+        # Calculate next patch version
+        IFS='.' read -ra VERSION_PARTS <<< "$LATEST_RELEASE"
+        MAJOR=${VERSION_PARTS[0]:-0}
+        MINOR=${VERSION_PARTS[1]:-0}
+        PATCH=${VERSION_PARTS[2]:-0}
+        
+        # Increment patch version
+        NEXT_PATCH=$((PATCH + 1))
+        SUGGESTED_VERSION="$MAJOR.$MINOR.$NEXT_PATCH"
+        
+        echo "Suggested next version: $SUGGESTED_VERSION"
+        echo "suggested-version=$SUGGESTED_VERSION" >> $GITHUB_OUTPUT
+        
+        # Also suggest next minor version
+        NEXT_MINOR=$((MINOR + 1))
+        SUGGESTED_MINOR="$MAJOR.$NEXT_MINOR.0"
+        echo "Suggested next minor version: $SUGGESTED_MINOR"
+        echo "suggested-minor=$SUGGESTED_MINOR" >> $GITHUB_OUTPUT
+        
+        echo ""
+        echo "🚀 VERSION SUGGESTIONS 🚀"
+        echo "=========================="
+        echo "📦 For a patch release (bug fixes): $SUGGESTED_VERSION"
+        echo "✨ For a minor release (new features): $SUGGESTED_MINOR"
+        echo "🔥 For a major release (breaking changes): $((MAJOR + 1)).0.0"
+        echo ""
+        echo "ℹ️  Requested version for this release: ${{ github.event.inputs.version }}"
 
     - name: Setup Helm
       uses: azure/setup-helm@v3

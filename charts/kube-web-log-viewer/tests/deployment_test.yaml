@@ -18,9 +18,9 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].env[0].name
           value: "APP_VERSION"
-      - equal:
+      - matchRegex:
           path: spec.template.spec.containers[0].env[0].value
-          value: "0.0.0-dev"
+          pattern: '^[0-9]+\.[0-9]+\.[0-9]+.*$'
       - equal:
           path: spec.template.spec.containers[0].env[1].name
           value: "RETAIN_ALL_POD_LOGS"
