@@ -131,6 +131,12 @@
                                 Storage Stats
                             </button>
                         </div>
+
+                        <div class="px-4 py-2 border-t border-gray-200 dark:border-gray-700">
+                            <div class="text-xs text-gray-500 dark:text-gray-400 text-center">
+                                Version: <span id="appVersion">Loading...</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -205,9 +211,21 @@
             const storageStatsModal = document.getElementById('storageStatsModal');
             const closeStorageStats = document.getElementById('closeStorageStats');
             const storageStatsContent = document.getElementById('storageStatsContent');
+            const appVersion = document.getElementById('appVersion');
 
             let currentLogs = [];
             let currentPodName = null;
+
+            // --- Version Information ---
+            async function fetchVersion() {
+                try {
+                    const versionData = await fetchFromServer('/api/version');
+                    appVersion.textContent = versionData.version || 'Unknown';
+                } catch (error) {
+                    console.warn('Could not fetch version information:', error.message);
+                    appVersion.textContent = 'Unknown';
+                }
+            }
 
             // --- Storage Stats Modal ---
             async function updateStorageStats() {
@@ -755,6 +773,7 @@
 
             // Initial data fetch
             fetchPods();
+            fetchVersion();
         });
     </script>
 </body>
