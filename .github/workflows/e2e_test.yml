@@ -169,8 +169,12 @@ jobs:
 
       - name: Test previous logs functionality
         run: |
-          # get the pod name
-          pod_name=$(kubectl get pods -n log-viewer-testing -l app=log-gen-deployment -o jsonpath='{.items[0].metadata.name}')
+          # get the pod name with error handling
+          pod_name=$(kubectl get pods -n log-viewer-testing -l app=log-gen -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          if [ -z "$pod_name" ]; then
+            echo "No pod found with label app=log-gen"
+            exit 1
+          fi
           echo "Pod name: $pod_name"
           # delete the pod
           kubectl delete pod $pod_name -n log-viewer-testing
