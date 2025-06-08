@@ -17,9 +17,15 @@ tests:
           value: "python:3.13-slim"
       - equal:
           path: spec.template.spec.containers[0].env[0].name
-          value: "RETAIN_ALL_POD_LOGS"
+          value: "APP_VERSION"
       - equal:
           path: spec.template.spec.containers[0].env[0].value
+          value: "0.0.0-dev"
+      - equal:
+          path: spec.template.spec.containers[0].env[1].name
+          value: "RETAIN_ALL_POD_LOGS"
+      - equal:
+          path: spec.template.spec.containers[0].env[1].value
           value: "true"
 
   - it: should render deployment with custom values
@@ -35,7 +41,7 @@ tests:
           path: spec.template.spec.containers[0].image
           value: "python:3.12-slim"
       - equal:
-          path: spec.template.spec.containers[0].env[0].value
+          path: spec.template.spec.containers[0].env[1].value
           value: "false"
 
   - it: should use existing secret for API key
@@ -44,10 +50,10 @@ tests:
       auth.existingSecretKey: "my-key"
     asserts:
       - equal:
-          path: spec.template.spec.containers[0].env[3].valueFrom.secretKeyRef.name
+          path: spec.template.spec.containers[0].env[4].valueFrom.secretKeyRef.name
           value: "my-secret"
       - equal:
-          path: spec.template.spec.containers[0].env[3].valueFrom.secretKeyRef.key
+          path: spec.template.spec.containers[0].env[4].valueFrom.secretKeyRef.key
           value: "my-key"
 
   - it: should use direct API key value when no existing secret
@@ -55,7 +61,7 @@ tests:
       auth.apiKey: "test-key"
     asserts:
       - equal:
-          path: spec.template.spec.containers[0].env[3].value
+          path: spec.template.spec.containers[0].env[4].value
           value: "test-key"
 
   - it: should set resource limits and requests

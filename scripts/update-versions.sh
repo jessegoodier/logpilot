@@ -41,6 +41,9 @@ VERSION_FILES["charts/kube-web-log-viewer/Chart.yaml"]="s/^version:.*/version: $
 VERSION_FILES["charts/kube-web-log-viewer/pyproject.toml"]="s/^version = .*/version = \"$NEW_VERSION\"/"
 VERSION_FILES["charts/kube-web-log-viewer/src/__init__.py"]="s/^__version__ = .*/__version__ = \"$NEW_VERSION\"/"
 
+# K8s deployment files (for APP_VERSION environment variable)
+VERSION_FILES["k8s/deployment.yaml"]="s/value: \".*\" # APP_VERSION/value: \"$NEW_VERSION\" # APP_VERSION/"
+
 # Update all files
 for file in "${!VERSION_FILES[@]}"; do
     pattern="${VERSION_FILES[$file]}"
@@ -60,5 +63,8 @@ echo ""
 echo "Python module versions:"
 grep "^__version__" src/__init__.py || echo "Root __init__.py not found"
 grep "^__version__" charts/kube-web-log-viewer/src/__init__.py || echo "Chart __init__.py not found"
+echo ""
+echo "K8s deployment version:"
+grep "APP_VERSION" k8s/deployment.yaml || echo "K8s deployment.yaml not found"
 echo ""
 echo "Version update completed successfully!"

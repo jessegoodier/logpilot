@@ -11,6 +11,9 @@ from flask import (
 )
 import json
 
+# --- Version Configuration ---
+__version__ = os.environ.get("APP_VERSION", "0.0.0-dev")
+
 # --- Log Archiver Imports ---
 from log_archiver import start_log_cleanup_job, watch_pods_and_archive
 
@@ -749,6 +752,15 @@ def purge_previous_logs():
     except Exception as e:
         app.logger.error(f"Error purging previous pod logs: {str(e)}", exc_info=True)
         return jsonify({"success": False, "message": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@app.route("/api/version", methods=["GET"])
+def get_version():
+    """
+    API endpoint to get the application version.
+    Returns a JSON object with the current version.
+    """
+    return jsonify({"version": __version__})
 
 
 # --- Main Execution ---
