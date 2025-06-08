@@ -42,18 +42,22 @@ def test_log_viewer_e2e(page: Page):
         # First check if the selector itself exists
         expect(pod_selector).to_be_visible(timeout=NAV_TIMEOUT)
 
-        # Then check for options within the optgroup
-        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(1, timeout=NAV_TIMEOUT)
+        # Then check for options within the optgroup (expecting 2: init container and main container)
+        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(2, timeout=NAV_TIMEOUT)
         print("Pod selector populated.")
 
-        # Find the log-gen pod option
+        # Find the log-gen pod option (main container, not init container)
         # The pod name will be dynamic, so we look for the prefix
         # We need to handle cases where it might be in an optgroup
-        log_gen_pod_option_locator = pod_selector.locator(f"option[value^='{LOG_GEN_POD_NAME_PREFIX}']")
+        log_gen_pod_option_locator = pod_selector.locator(
+            f"option[value^='{LOG_GEN_POD_NAME_PREFIX}'][value*='/log-gen']"
+        )
 
         # If not found directly, check within optgroups (common case)
         if not log_gen_pod_option_locator.count():
-            log_gen_pod_option_locator = pod_selector.locator(f"optgroup > option[value^='{LOG_GEN_POD_NAME_PREFIX}']")
+            log_gen_pod_option_locator = pod_selector.locator(
+                f"optgroup > option[value^='{LOG_GEN_POD_NAME_PREFIX}'][value*='/log-gen']"
+            )
 
         expect(log_gen_pod_option_locator).not_to_have_count(0, timeout=NAV_TIMEOUT)
 
@@ -225,12 +229,16 @@ def test_sort_order_functionality(page: Page):
 
         # Wait for pod selector to be populated
         expect(pod_selector).to_be_visible(timeout=NAV_TIMEOUT)
-        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(1, timeout=NAV_TIMEOUT)
+        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(2, timeout=NAV_TIMEOUT)
 
-        # Find the log-gen pod
-        log_gen_pod_option_locator = pod_selector.locator(f"option[value^='{LOG_GEN_POD_NAME_PREFIX}']")
+        # Find the log-gen pod (main container, not init container)
+        log_gen_pod_option_locator = pod_selector.locator(
+            f"option[value^='{LOG_GEN_POD_NAME_PREFIX}'][value*='/log-gen']"
+        )
         if not log_gen_pod_option_locator.count():
-            log_gen_pod_option_locator = pod_selector.locator(f"optgroup > option[value^='{LOG_GEN_POD_NAME_PREFIX}']")
+            log_gen_pod_option_locator = pod_selector.locator(
+                f"optgroup > option[value^='{LOG_GEN_POD_NAME_PREFIX}'][value*='/log-gen']"
+            )
 
         expect(log_gen_pod_option_locator).not_to_have_count(0, timeout=NAV_TIMEOUT)
         log_gen_pod_value = log_gen_pod_option_locator.first.get_attribute("value")
