@@ -44,6 +44,46 @@ jobs:
         ls -la charts/kube-web-log-viewer/
         ls -la charts/kube-web-log-viewer/src/
 
+    - name: Validate version is greater than latest release
+      run: |
+        VERSION="${{ github.event.inputs.version }}"
+        echo "Validating that version $VERSION is greater than the latest released version..."
+        
+        # Get the latest release version from GitHub API
+        LATEST_RELEASE=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r '.tag_name // "v0.0.0"' | sed 's/^v//')
+        echo "Latest released version: $LATEST_RELEASE"
+        echo "Requested version: $VERSION"
+        
+        # Function to compare semantic versions
+        version_compare() {
+          # Split versions into arrays
+          IFS='.' read -ra VER1 <<< "$1"
+          IFS='.' read -ra VER2 <<< "$2"
+          
+          # Pad arrays to same length with zeros
+          while [ ${#VER1[@]} -lt 3 ]; do VER1+=(0); done
+          while [ ${#VER2[@]} -lt 3 ]; do VER2+=(0); done
+          
+          # Compare each component
+          for i in {0..2}; do
+            if [ ${VER1[i]} -gt ${VER2[i]} ]; then
+              return 0  # VER1 > VER2
+            elif [ ${VER1[i]} -lt ${VER2[i]} ]; then
+              return 1  # VER1 < VER2
+            fi
+          done
+          return 1  # VER1 == VER2
+        }
+        
+        # Compare versions
+        if version_compare "$VERSION" "$LATEST_RELEASE"; then
+          echo "✅ Version $VERSION is greater than latest release $LATEST_RELEASE"
+        else
+          echo "❌ Error: Version $VERSION must be greater than the latest release $LATEST_RELEASE"
+          echo "Please choose a version number greater than $LATEST_RELEASE"
+          exit 1
+        fi
+
     - name: Update all version references
       run: |
         VERSION="${{ github.event.inputs.version }}"
