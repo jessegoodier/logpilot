@@ -226,6 +226,7 @@ def test_sort_order_functionality(page: Page):
         sort_order_selector = page.locator("#sortOrder")
         log_output = page.locator("#logOutput")
         loading_indicator = page.locator("#loadingIndicator")
+        settings_button = page.locator("#settingsButton")
 
         # Wait for pod selector to be populated
         expect(pod_selector).to_be_visible(timeout=NAV_TIMEOUT)
@@ -275,6 +276,10 @@ def test_sort_order_functionality(page: Page):
         print("Testing live pod with newest first...")
         pod_selector.select_option(log_gen_pod_value)
         expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+        # Open settings menu to access sort order
+        settings_button.click()
+        expect(sort_order_selector).to_be_visible(timeout=ACTION_TIMEOUT)
 
         sort_order_selector.select_option("desc")  # Newest first
         expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
