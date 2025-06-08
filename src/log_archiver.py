@@ -106,16 +106,38 @@ def get_pod_logs(v1, namespace, pod_name, container_name=None):
 
 def archive_pod_logs(v1, namespace, pod_name, log_dir):
     """
-    Archive logs for all containers in a pod.
+    Archive logs for all containers and init containers in a pod.
     """
     try:
         pod = v1.read_namespaced_pod(name=pod_name, namespace=namespace)
-        for container in pod.spec.containers:
+        containers = pod.spec.containers or []
+        init_containers = pod.spec.init_containers or []
+
+        # Archive init container logs first
+        for init_container in init_containers:
+            container_name = init_container.name
+            log_data = get_pod_logs(v1, namespace, pod_name, container_name)
+            if log_data:
+                # Use "init-" prefix for init containers to distinguish them
+                if len(containers) + len(init_containers) > 1:
+                    filename = f"{pod_name}/init-{container_name}.log"
+                else:
+                    filename = f"{pod_name}.log"
+
+                log_path = os.path.join(log_dir, filename)
+                os.makedirs(os.path.dirname(log_path), exist_ok=True)
+
+                with open(log_path, "w") as f:
+                    f.write(log_data)
+                logging.info(f"Archived logs for pod {pod_name} init container {container_name}")
+
+        # Archive regular container logs
+        for container in containers:
             container_name = container.name
             log_data = get_pod_logs(v1, namespace, pod_name, container_name)
             if log_data:
-                # Create filename based on whether there are multiple containers
-                if len(pod.spec.containers) > 1:
+                # Create filename based on whether there are multiple containers or init containers
+                if len(containers) + len(init_containers) > 1:
                     filename = f"{pod_name}/{container_name}.log"
                 else:
                     filename = f"{pod_name}.log"

@@ -33,6 +33,7 @@ spec:
       labels:
         app: log-gen
     spec:
+      terminationGracePeriodSeconds: 1
       initContainers:
       - name: init-container
         image: python:3.13-slim

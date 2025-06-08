@@ -211,10 +211,17 @@ def get_pods():
                 continue
             pod_name = pod.metadata.name
             containers = [container.name for container in pod.spec.containers]
-            if len(containers) == 1:
+            init_containers = [container.name for container in (pod.spec.init_containers or [])]
+
+            # Add init containers with "init-" prefix to distinguish them
+            for init_container in init_containers:
+                pod_info.append(f"{pod_name}/init-{init_container}")
+
+            # Add regular containers
+            if len(containers) == 1 and not init_containers:
                 pod_info.append(pod_name)
             else:
-                # For pods with multiple containers, add each container as pod/container
+                # For pods with multiple containers or any init containers, add each container as pod/container
                 for container in containers:
                     pod_info.append(f"{pod_name}/{container}")
 
@@ -300,6 +307,45 @@ def get_logs():
                     continue
 
                 pod_name = pod.metadata.name
+
+                # Process init containers first
+                for init_container in pod.spec.init_containers or []:
+                    container_name = f"init-{init_container.name}"
+                    try:
+                        log_data_stream = v1.read_namespaced_pod_log(
+                            name=pod_name,
+                            namespace=KUBE_NAMESPACE,
+                            container=init_container.name,
+                            timestamps=True,
+                            tail_lines=tail_lines,
+                            follow=False,
+                            _preload_content=True,
+                        )
+                        raw_log_lines = log_data_stream.splitlines()
+                        for line_str in raw_log_lines:
+                            if not line_str:
+                                continue
+                            log_entry = parse_log_line(line_str)
+                            if search_string and search_string not in log_entry["message"].lower():
+                                continue
+                            log_entry["pod_name"] = pod_name
+                            log_entry["container_name"] = container_name
+                            all_logs.append(log_entry)
+                    except ApiException as e:
+                        app.logger.warning(
+                            f"Could not fetch logs for pod {pod_name} init container {init_container.name}: {e.status} - {e.reason}"
+                        )
+                        all_logs.append(
+                            {
+                                "pod_name": pod_name,
+                                "container_name": container_name,
+                                "timestamp": None,
+                                "message": f"Error fetching logs: {e.reason}",
+                                "error": True,
+                            }
+                        )
+
+                # Process regular containers
                 for container in pod.spec.containers:
                     container_name = container.name
                     try:
@@ -352,13 +398,22 @@ def get_logs():
             # Split pod_name into pod and container if it contains a slash
             pod_name = pod_name_req
             container_name = None
+
             if "/" in pod_name_req:
                 pod_name, container_name = pod_name_req.split("/", 1)
+                # Check if this is an init container (prefixed with "init-")
+                if container_name.startswith("init-"):
+                    # Remove the "init-" prefix to get the actual container name
+                    actual_container_name = container_name[5:]
+                else:
+                    actual_container_name = container_name
+            else:
+                actual_container_name = container_name
 
             log_data_stream = v1.read_namespaced_pod_log(
                 name=pod_name,
                 namespace=KUBE_NAMESPACE,
-                container=container_name,
+                container=actual_container_name,
                 timestamps=True,
                 tail_lines=tail_lines,
                 follow=False,
@@ -437,10 +492,17 @@ def get_archived_pods():
                 for pod in pod_list_response.items:
                     pod_name = pod.metadata.name
                     containers = [container.name for container in pod.spec.containers]
-                    if len(containers) == 1:
+                    init_containers = [container.name for container in (pod.spec.init_containers or [])]
+                    
+                    # Add init containers with "init-" prefix
+                    for init_container in init_containers:
+                        running_pod_containers.add(f"{pod_name}/init-{init_container}")
+                    
+                    # Add regular containers
+                    if len(containers) == 1 and not init_containers:
                         running_pod_containers.add(pod_name)
                     else:
-                        # For pods with multiple containers, add each container as pod/container
+                        # For pods with multiple containers or any init containers, add each container as pod/container
                         for container in containers:
                             running_pod_containers.add(f"{pod_name}/{container}")
                 app.logger.info(f"Found {len(running_pod_containers)} currently running pod/container combinations.")
@@ -450,13 +512,18 @@ def get_archived_pods():
                 running_pod_containers = set()
 
             # List archived log files and exclude currently running pods
-            for filename in os.listdir(LOG_DIR):
-                if filename.endswith(".log"):
-                    # Remove .log extension to get pod/container name
-                    pod_container = filename[:-4]
-                    # Exclude current pod and any currently running pods
-                    if KUBE_POD_NAME not in pod_container and pod_container not in running_pod_containers:
-                        archived_pod_names.append(pod_container)
+            # Use os.walk to search subdirectories since multi-container pods create subdirectories
+            for root, dirs, files in os.walk(LOG_DIR):
+                for filename in files:
+                    if filename.endswith(".log"):
+                        # Get relative path from LOG_DIR to construct pod/container name
+                        file_path = os.path.join(root, filename)
+                        relative_path = os.path.relpath(file_path, LOG_DIR)
+                        # Remove .log extension to get pod/container name
+                        pod_container = relative_path[:-4]
+                        # Exclude current pod and any currently running pods
+                        if KUBE_POD_NAME not in pod_container and pod_container not in running_pod_containers:
+                            archived_pod_names.append(pod_container)
 
             app.logger.info(f"Found {len(archived_pod_names)} previous (non-running) pod/container logs in {LOG_DIR}.")
         except OSError as e:
