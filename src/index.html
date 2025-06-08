@@ -503,7 +503,7 @@
 
                 const params = new URLSearchParams({
                     pod_name: actualPodName,
-                    sort_order: isArchivedLog ? (sortOrder.value === 'asc' ? 'desc' : 'asc') : sortOrder.value,
+                    sort_order: sortOrder.value,
                     tail_lines: numLines.value,
                     search_string: searchBox.value.trim(),
                 });

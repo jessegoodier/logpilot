@@ -195,6 +195,7 @@ def watch_pods_and_archive(namespace, v1, log_dir, logger):
             logger.error(f"Error in pod watcher: {e}")
             time.sleep(60)  # Wait before retrying
 
+
 def purge_previous_pod_logs(log_dir, logger):
     """
     Deletes only the previous pod log files in the specified directory.

@@ -42,18 +42,22 @@ def test_log_viewer_e2e(page: Page):
         # First check if the selector itself exists
         expect(pod_selector).to_be_visible(timeout=NAV_TIMEOUT)
 
-        # Then check for options within the optgroup
-        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(1, timeout=NAV_TIMEOUT)
+        # Then check for options within the optgroup (expecting 2: init container and main container)
+        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(2, timeout=NAV_TIMEOUT)
         print("Pod selector populated.")
 
-        # Find the log-gen pod option
+        # Find the log-gen pod option (main container, not init container)
         # The pod name will be dynamic, so we look for the prefix
         # We need to handle cases where it might be in an optgroup
-        log_gen_pod_option_locator = pod_selector.locator(f"option[value^='{LOG_GEN_POD_NAME_PREFIX}']")
+        log_gen_pod_option_locator = pod_selector.locator(
+            f"option[value^='{LOG_GEN_POD_NAME_PREFIX}'][value*='/log-gen']"
+        )
 
         # If not found directly, check within optgroups (common case)
         if not log_gen_pod_option_locator.count():
-            log_gen_pod_option_locator = pod_selector.locator(f"optgroup > option[value^='{LOG_GEN_POD_NAME_PREFIX}']")
+            log_gen_pod_option_locator = pod_selector.locator(
+                f"optgroup > option[value^='{LOG_GEN_POD_NAME_PREFIX}'][value*='/log-gen']"
+            )
 
         expect(log_gen_pod_option_locator).not_to_have_count(0, timeout=NAV_TIMEOUT)
 
@@ -199,3 +203,170 @@ def test_log_viewer_e2e(page: Page):
         page.screenshot(path=screenshot_path)
         print(f"Test failed: {e}")
         pytest.fail(f"Test failed due to: {e}")
+
+
+def test_sort_order_functionality(page: Page):
+    """
+    Test sort order functionality for live pods, archived pods, and all pods view.
+    1. Tests newest first and oldest first for live pods
+    2. Tests newest first and oldest first for archived pods (if available)
+    3. Tests newest first and oldest first for all pods view
+    """
+    try:
+        # Navigate to the app
+        page.goto(APP_BASE_URL, timeout=NAV_TIMEOUT)
+        page.wait_for_load_state("networkidle", timeout=NAV_TIMEOUT)
+
+        # Wait for namespace to be displayed
+        namespace_display = page.locator("#namespaceValue")
+        expect(namespace_display).not_to_have_text("Loading...", timeout=NAV_TIMEOUT)
+        expect(namespace_display).not_to_have_text("Error loading", timeout=ACTION_TIMEOUT)
+
+        pod_selector = page.locator("#podSelector")
+        sort_order_selector = page.locator("#sortOrder")
+        log_output = page.locator("#logOutput")
+        loading_indicator = page.locator("#loadingIndicator")
+        settings_button = page.locator("#settingsButton")
+
+        # Wait for pod selector to be populated
+        expect(pod_selector).to_be_visible(timeout=NAV_TIMEOUT)
+        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(2, timeout=NAV_TIMEOUT)
+
+        # Find the log-gen pod (main container, not init container)
+        log_gen_pod_option_locator = pod_selector.locator(
+            f"option[value^='{LOG_GEN_POD_NAME_PREFIX}'][value*='/log-gen']"
+        )
+        if not log_gen_pod_option_locator.count():
+            log_gen_pod_option_locator = pod_selector.locator(
+                f"optgroup > option[value^='{LOG_GEN_POD_NAME_PREFIX}'][value*='/log-gen']"
+            )
+
+        expect(log_gen_pod_option_locator).not_to_have_count(0, timeout=NAV_TIMEOUT)
+        log_gen_pod_value = log_gen_pod_option_locator.first.get_attribute("value")
+        if log_gen_pod_value is None:
+            raise ValueError("log_gen_pod_option does not have a value attribute")
+
+        # Helper function to get timestamps from log entries
+        def get_log_timestamps():
+            page.wait_for_function(
+                """
+                () => {
+                    const content = document.querySelector('#logOutput').textContent;
+                    return content && content.trim().length > 0 && 
+                           !content.includes('No logs to display') && 
+                           !content.includes('Error loading logs');
+                }
+                """,
+                timeout=LOG_LOAD_TIMEOUT,
+            )
+
+            # Get all log lines with timestamps
+            log_lines = log_output.locator("div.log-line")
+            timestamps = []
+            for i in range(min(log_lines.count(), 5)):  # Check first 5 lines
+                line = log_lines.nth(i)
+                timestamp_span = line.locator("span.timestamp")
+                if timestamp_span.count() > 0:
+                    timestamp_text = timestamp_span.text_content()
+                    if timestamp_text:
+                        timestamps.append(timestamp_text.strip())
+            return timestamps
+
+        # Test 1: Live pod with newest first (default)
+        print("Testing live pod with newest first...")
+        pod_selector.select_option(log_gen_pod_value)
+        expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+        # Open settings menu to access sort order
+        settings_button.click()
+        expect(sort_order_selector).to_be_visible(timeout=ACTION_TIMEOUT)
+
+        sort_order_selector.select_option("desc")  # Newest first
+        expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+        newest_first_timestamps = get_log_timestamps()
+        print(f"Newest first timestamps: {newest_first_timestamps[:3]}")
+
+        # Test 2: Live pod with oldest first
+        print("Testing live pod with oldest first...")
+        sort_order_selector.select_option("asc")  # Oldest first
+        expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+        oldest_first_timestamps = get_log_timestamps()
+        print(f"Oldest first timestamps: {oldest_first_timestamps[:3]}")
+
+        # Verify that the order is different (unless there's only one log entry)
+        if len(newest_first_timestamps) > 1 and len(oldest_first_timestamps) > 1:
+            assert newest_first_timestamps != oldest_first_timestamps, "Sort order should change timestamps order"
+            # First timestamp in newest-first should be newer than first in oldest-first
+            assert (
+                newest_first_timestamps[0] >= oldest_first_timestamps[0]
+            ), "Newest first should show newer logs at top"
+
+        # Test 3: Check if archived pods are available
+        archived_pod_options = pod_selector.locator("optgroup[label='Archived Pods'] option")
+        archived_pod_count = archived_pod_options.count()
+
+        if archived_pod_count > 0:
+            print(f"Testing archived pods (found {archived_pod_count})...")
+
+            # Select first archived pod
+            archived_pod_value = archived_pod_options.first.get_attribute("value")
+            pod_selector.select_option(archived_pod_value)
+            expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+            # Test newest first for archived pod
+            sort_order_selector.select_option("desc")
+            expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+            archived_newest_first = get_log_timestamps()
+            print(f"Archived newest first: {archived_newest_first[:3]}")
+
+            # Test oldest first for archived pod
+            sort_order_selector.select_option("asc")
+            expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+            archived_oldest_first = get_log_timestamps()
+            print(f"Archived oldest first: {archived_oldest_first[:3]}")
+
+            # Verify order is different for archived logs too
+            if len(archived_newest_first) > 1 and len(archived_oldest_first) > 1:
+                assert archived_newest_first != archived_oldest_first, "Archived logs sort order should change"
+        else:
+            print("No archived pods found, skipping archived pod sort tests")
+
+        # Test 4: All pods view
+        print("Testing all pods view...")
+        pod_selector.select_option("all")
+        expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+        # Test newest first for all pods
+        sort_order_selector.select_option("desc")
+        expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+        all_pods_newest_first = get_log_timestamps()
+        print(f"All pods newest first: {all_pods_newest_first[:3]}")
+
+        # Test oldest first for all pods
+        sort_order_selector.select_option("asc")
+        expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
+
+        all_pods_oldest_first = get_log_timestamps()
+        print(f"All pods oldest first: {all_pods_oldest_first[:3]}")
+
+        # Verify order is different for all pods view
+        if len(all_pods_newest_first) > 1 and len(all_pods_oldest_first) > 1:
+            assert all_pods_newest_first != all_pods_oldest_first, "All pods sort order should change"
+
+        print("Sort order functionality test completed successfully.")
+
+    except Exception as e:
+        # Capture a screenshot on failure
+        screenshot_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "test-results",
+            "test-failure-sort-screenshot.png",
+        )
+        page.screenshot(path=screenshot_path)
+        print(f"Sort order test failed: {e}")
+        pytest.fail(f"Sort order test failed due to: {e}")

@@ -7,7 +7,7 @@ data:
     import time
     import sys
 
-    log_levels = ['info', 'inf', 'wrn', 'warn', 'err', 'error', 'panic']
+    log_levels = sorted(['alert', 'crit', 'debug', 'dbg', 'emerg', 'error', 'fatal', 'inf', 'info', 'notice', 'panic', 'trace', 'warn', 'warning', 'wrn'])
     index = 0
 
     while True:
@@ -33,6 +33,11 @@ spec:
       labels:
         app: log-gen
     spec:
+      terminationGracePeriodSeconds: 1
+      initContainers:
+      - name: init-container
+        image: python:3.13-slim
+        command: ["python", "-c", "print('[INFO] Hello from init container!', flush=True)"]
       containers:
       - name: log-gen
         image: python:3.13-slim

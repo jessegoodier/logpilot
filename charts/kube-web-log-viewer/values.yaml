@@ -30,7 +30,7 @@ replicaCount: 1
 
 image:
   repository: python
-  tag: "3.13-slim"
+  tag: 3.13-slim
   pullPolicy: IfNotPresent
 
 # Ingress configuration

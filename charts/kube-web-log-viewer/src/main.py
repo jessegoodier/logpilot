@@ -455,10 +455,9 @@ def get_archived_pods():
                     # Remove .log extension to get pod/container name
                     pod_container = filename[:-4]
                     # Exclude current pod and any currently running pods
-                    if (KUBE_POD_NAME not in pod_container and 
-                        pod_container not in running_pod_containers):
+                    if KUBE_POD_NAME not in pod_container and pod_container not in running_pod_containers:
                         archived_pod_names.append(pod_container)
-            
+
             app.logger.info(f"Found {len(archived_pod_names)} previous (non-running) pod/container logs in {LOG_DIR}.")
         except OSError as e:
             app.logger.error(f"Error listing previous pod logs directory {LOG_DIR}: {e}")
@@ -637,11 +636,13 @@ def get_purge_capability():
     """
     global RETAIN_ALL_POD_LOGS, ALLOW_PREVIOUS_LOG_PURGE
 
-    return jsonify({
-        "purge_allowed": RETAIN_ALL_POD_LOGS and ALLOW_PREVIOUS_LOG_PURGE,
-        "logs_enabled": RETAIN_ALL_POD_LOGS,
-        "purge_enabled": ALLOW_PREVIOUS_LOG_PURGE
-    })
+    return jsonify(
+        {
+            "purge_allowed": RETAIN_ALL_POD_LOGS and ALLOW_PREVIOUS_LOG_PURGE,
+            "logs_enabled": RETAIN_ALL_POD_LOGS,
+            "purge_enabled": ALLOW_PREVIOUS_LOG_PURGE,
+        }
+    )
 
 
 @app.route("/api/purgePreviousLogs", methods=["POST"])
