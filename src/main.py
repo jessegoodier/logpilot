@@ -493,11 +493,11 @@ def get_archived_pods():
                     pod_name = pod.metadata.name
                     containers = [container.name for container in pod.spec.containers]
                     init_containers = [container.name for container in (pod.spec.init_containers or [])]
-                    
+
                     # Add init containers with "init-" prefix
                     for init_container in init_containers:
                         running_pod_containers.add(f"{pod_name}/init-{init_container}")
-                    
+
                     # Add regular containers
                     if len(containers) == 1 and not init_containers:
                         running_pod_containers.add(pod_name)

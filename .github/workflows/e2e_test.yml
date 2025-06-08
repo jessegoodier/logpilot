@@ -48,10 +48,10 @@ jobs:
         run: |
           # Run ruff check and capture output
           ruff check . --output-format=json > ruff-issues.json || true
-          
+
           # Run ruff format and capture changes, ensuring valid JSON output
           ruff format . --output-format=json > ruff-format.json || echo "[]" > ruff-format.json
-          
+
           # Create a comment with the issues if any
           if [ -s ruff-issues.json ] || [ -s ruff-format.json ]; then
             echo "RUFF_ISSUES=$(cat ruff-issues.json)" >> $GITHUB_ENV
@@ -66,11 +66,11 @@ jobs:
             // Debug output
             console.log('RUFF_ISSUES:', process.env.RUFF_ISSUES);
             console.log('RUFF_FORMAT:', process.env.RUFF_FORMAT);
-            
+
             // Parse with error handling
             let issues = [];
             let format = [];
-            
+
             try {
               if (process.env.RUFF_ISSUES) {
                 issues = JSON.parse(process.env.RUFF_ISSUES);
@@ -78,7 +78,7 @@ jobs:
             } catch (e) {
               console.error('Error parsing RUFF_ISSUES:', e);
             }
-            
+
             try {
               if (process.env.RUFF_FORMAT) {
                 format = JSON.parse(process.env.RUFF_FORMAT);
@@ -86,23 +86,23 @@ jobs:
             } catch (e) {
               console.error('Error parsing RUFF_FORMAT:', e);
             }
-            
+
             let message = '## Ruff Code Quality Issues\n\n';
-            
+
             if (issues.length > 0) {
               message += '### Linting Issues\n';
               issues.forEach(issue => {
                 message += `- ${issue.message} (${issue.filename}:${issue.line})\n`;
               });
             }
-            
+
             if (format.length > 0) {
               message += '\n### Formatting Issues\n';
               format.forEach(change => {
                 message += `- ${change.filename} needs formatting\n`;
               });
             }
-            
+
             // Only add fix commands if there are actual issues
             if (issues.length > 0 || format.length > 0) {
               message += '\n\nTo fix these issues, run:\n```bash\n';
@@ -114,7 +114,7 @@ jobs:
               }
               message += '```';
             }
-            
+
             // Only create comment if there are actual issues
             if (issues.length > 0 || format.length > 0) {
               github.rest.issues.createComment({
@@ -166,6 +166,27 @@ jobs:
         env:
           PYTHONPATH: .
           TEST_BASE_URL: "http://localhost:5001"
+
+      - name: Test previous logs functionality
+        run: |
+          # get the pod name
+          pod_name=$(kubectl get pods -n log-viewer-testing -l app=log-gen-deployment -o jsonpath='{.items[0].metadata.name}')
+          echo "Pod name: $pod_name"
+          # delete the pod
+          kubectl delete pod $pod_name -n log-viewer-testing
+          # wait for ready
+          kubectl wait -n log-viewer-testing --for=condition=ready pod --selector app.kubernetes.io/name=log-gen-deployment --timeout=120s
+
+          # get the logs from the api http://wsl:5001/api/archived_pods
+          logs=$(curl -s http://localhost:5001/api/archived_pods)
+          echo "Logs: $logs"
+          # check if the logs contain the string captured from pod_name
+          if echo "$logs" | grep -q "$pod_name"; then
+            echo "Logs contain the string captured from pod_name"
+          else
+            echo "Logs do not contain the string captured from pod_name, which was $pod_name"
+            exit 1
+          fi
 
       - name: Cleanup port forwarding
         if: always()

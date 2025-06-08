@@ -231,34 +231,56 @@ def purge_previous_pod_logs(log_dir, logger):
     deleted_count = 0
     error_count = 0
 
-    # Get list of current pods
+    # Get list of current pod/container combinations
     try:
         v1 = client.CoreV1Api()
         namespace = os.environ.get("K8S_NAMESPACE", "default")
         pod_list = v1.list_namespaced_pod(namespace=namespace)
-        current_pods = {pod.metadata.name for pod in pod_list.items}
+        current_pod_containers = set()
+
+        for pod in pod_list.items:
+            pod_name = pod.metadata.name
+            containers = [container.name for container in pod.spec.containers]
+            init_containers = [container.name for container in (pod.spec.init_containers or [])]
+
+            # Add init containers with "init-" prefix
+            for init_container in init_containers:
+                current_pod_containers.add(f"{pod_name}/init-{init_container}")
+
+            # Add regular containers
+            if len(containers) == 1 and not init_containers:
+                current_pod_containers.add(pod_name)
+            else:
+                # For pods with multiple containers or any init containers, add each container as pod/container
+                for container in containers:
+                    current_pod_containers.add(f"{pod_name}/{container}")
+
     except Exception as e:
         logger.error(f"Error getting current pod list: {e}")
         return 0, 1
 
-    for filename in os.listdir(log_dir):
-        if filename.endswith(".log"):  # Process only .log files
-            file_path = os.path.join(log_dir, filename)
-            try:
-                # Extract pod name from filename (remove .log extension and container name if present)
-                pod_name = filename.split("/")[0] if "/" in filename else filename[:-4]
+    # Use os.walk to search subdirectories since multi-container pods create subdirectories
+    for root, dirs, files in os.walk(log_dir):
+        for filename in files:
+            if filename.endswith(".log"):  # Process only .log files
+                file_path = os.path.join(root, filename)
+                try:
+                    # Get relative path from log_dir to construct pod/container name
+                    relative_path = os.path.relpath(file_path, log_dir)
+                    # Remove .log extension to get pod/container name
+                    pod_container = relative_path[:-4]
 
-                # Only delete if this pod is not in the current pod list
-                if pod_name not in current_pods:
-                    os.remove(file_path)
-                    logger.info(f"Purged previous pod log file: {file_path}")
-                    deleted_count += 1
-            except OSError as e:
-                logger.error(f"Error purging file {file_path}: {e}")
-                error_count += 1
-            except Exception as e:
-                logger.error(f"Unexpected error processing file {file_path}: {e}")
-                error_count += 1
+                    # Only delete if this pod/container is not in the current pod list
+                    if pod_container not in current_pod_containers:
+                        os.remove(file_path)
+                        logger.info(f"Purged previous pod log file: {file_path}")
+                        deleted_count += 1
+                except OSError as e:
+                    logger.error(f"Error purging file {file_path}: {e}")
+                    error_count += 1
+                except Exception as e:
+                    logger.error(f"Unexpected error processing file {file_path}: {e}")
+                    error_count += 1
 
     logger.info(f"Previous pod logs purge finished. Deleted: {deleted_count}, Errors: {error_count}")
     return deleted_count, error_count
