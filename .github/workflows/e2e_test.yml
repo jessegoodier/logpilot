@@ -180,7 +180,7 @@ jobs:
           # delete the pod
           kubectl delete pod $pod_name -n log-viewer-testing
           # wait for ready
-          kubectl wait -n log-viewer-testing --for=condition=ready pod --selector app.kubernetes.io/name=log-gen --timeout=120s
+          kubectl wait -n log-viewer-testing --for=condition=ready pod --selector app=log-gen --timeout=120s
 
           # get the logs from the api http://wsl:5001/api/archived_pods
           logs=$(curl -s http://localhost:5001/api/archived_pods)
