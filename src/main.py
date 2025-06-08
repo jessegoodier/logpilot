@@ -605,11 +605,17 @@ def get_archived_logs():
 
         app.logger.info(f"{len(processed_logs)} lines after search filter for archived pod/container '{pod_name}'.")
 
-        if sort_order == "desc":  # Newest first
-            processed_logs.reverse()
+        # Sort by timestamp
+        processed_logs.sort(
+            key=lambda x: x.get("timestamp") or "0000-00-00T00:00:00Z",
+            reverse=(sort_order == "desc"),
+        )
 
         if tail_lines is not None and tail_lines > 0:
-            processed_logs = processed_logs[:tail_lines]
+            if sort_order == "desc":
+                processed_logs = processed_logs[:tail_lines]
+            else:
+                processed_logs = processed_logs[-tail_lines:]
 
         return jsonify({"logs": processed_logs})
 
