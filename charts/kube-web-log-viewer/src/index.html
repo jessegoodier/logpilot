@@ -218,7 +218,7 @@
                         fetchFromServer('/api/archived_pods')
                     ]);
                     let content = '';
-                    
+
                     if (stats.enabled) {
                         const hasPreviousPods = archivedPods.archived_pods && archivedPods.archived_pods.length > 0;
                         const purgeButtonHtml = capability.purge_allowed && hasPreviousPods
@@ -228,7 +228,7 @@
                                     </button>
                                 </div>`
                             : '';
-                        
+
                         content = `
                             <div class="space-y-4">
                                 <div>
@@ -273,12 +273,12 @@
                     if (!confirm('Are you sure you want to delete all previous pod log files? This action cannot be undone.')) {
                         return;
                     }
-                    
+
                     try {
                         const response = await fetchFromServer('/api/purgePreviousLogs', {
                             method: 'POST'
                         });
-                        
+
                         if (response.success) {
                             alert(`Successfully purged ${response.deleted_count} previous pod log files.`);
                             // Close the modal
@@ -579,15 +579,15 @@
 
                 const logColoringRules = {
                     error: {
-                        terms: ['error', 'err', 'fatal', 'panic', 'exception', 'critical', 'failed', 'failure'],
+                        terms: ['error', 'err', 'fatal', 'panic', 'emerg', 'crit', 'critical', 'exception', 'critical', 'failed', 'failure'],
                         classes: ['text-red-600', 'dark:text-red-400', 'font-semibold']
                     },
                     warning: {
-                        terms: ['warning', 'warn', 'wrn'],
+                        terms: ['warning', 'warn', 'wrn', 'alert', 'notice'],
                         classes: ['text-orange-500', 'dark:text-orange-400']
                     },
                     info: {
-                        terms: ['info', 'notice', 'inf'],
+                        terms: ['info', 'inf'],
                         classes: ['text-green-600', 'dark:text-green-400']
                     },
                     debug: {
