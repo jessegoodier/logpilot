@@ -1,6 +1,6 @@
 {{ .Chart.Version }} installed
 1. Get the application URL by running these commands:
-  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "kube-web-log-viewer.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "logpilot.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
 
 2. Configuration:
    - Previous pod log retention: {{ if .Values.previousPodLogs.enabled }}ENABLED{{ else }}DISABLED{{ end }}

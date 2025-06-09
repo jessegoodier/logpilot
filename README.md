@@ -1,12 +1,12 @@
-# Kube Web Log Viewer<!-- omit in toc -->
+# logPilot - Kubernetes Pod Log Viewer<!-- omit in toc -->
 
 A simple Kubernetes pod log viewer web app.
 
 Give direct log access to your software engineers to see the logs without giving them access to the kubeconfig or other centralized log tools.
 
-This application is explicitly designed to only monitor logs of pods in the namespace it is deployed to. It can be easily adapted to view all pods in the cluster, but it may not scale well in larger environments.
+This application is designed to only monitor logs of pods in the namespace it is deployed to. It can be easily adapted to view all pods in the cluster, but it may not scale well in larger environments.
 
-![screenshot](kube-web-log-viewer.png)
+![screenshot](logpilot.png)
 
 ## Table of Contents<!-- omit in toc -->
 
@@ -47,7 +47,7 @@ See the [readme](charts/README.md) in the helm chart for instructions.
 
 1. Create the configmap:
     ```sh
-    kubectl create configmap kube-web-log-viewer \
+    kubectl create configmap logpilot \
       --from-file=src/main.py \
       --from-file=src/log_archiver.py \
       --from-file=src/index.html \
@@ -65,7 +65,7 @@ Modify [the app config](k8s/deployment.yaml). See comments on the API key usage.
 3. Port-forward to the service:
 
     ```sh
-    kubectl port-forward -n YOUR_NAMESPACE svc/kube-web-log-viewer-service 5001:5001
+    kubectl port-forward -n YOUR_NAMESPACE svc/logpilot-service 5001:5001
     ```
 
 The API key is designed to simply protect the UI from random users. Please use a VPN or other means to protect the app in sensitive environments.

@@ -38,29 +38,29 @@ jobs:
       - name: Sync source files to chart
         run: |
           # Ensure chart src directory exists
-          mkdir -p charts/kube-web-log-viewer/src
+          mkdir -p charts/logpilot/src
 
           # Copy source files to chart directory
-          cp -r src/* charts/kube-web-log-viewer/src/
-          cp pyproject.toml charts/kube-web-log-viewer/
+          cp -r src/* charts/logpilot/src/
+          cp pyproject.toml charts/logpilot/
 
           # Verify files were copied
           echo "Files in chart directory:"
-          ls -la charts/kube-web-log-viewer/
-          ls -la charts/kube-web-log-viewer/src/
+          ls -la charts/logpilot/
+          ls -la charts/logpilot/src/
 
       - name: Run Helm unit tests
         run: |
-          helm unittest charts/kube-web-log-viewer
+          helm unittest charts/logpilot
 
       - name: Lint Helm chart
         run: |
-          helm lint charts/kube-web-log-viewer
+          helm lint charts/logpilot
 
       - name: Template and validate chart
         run: |
           # Test with default values
-          helm template test-release charts/kube-web-log-viewer > /tmp/default-output.yaml
+          helm template test-release charts/logpilot > /tmp/default-output.yaml
           
           # Test with custom values
           cat > /tmp/test-values.yaml << EOF
@@ -82,7 +82,7 @@ jobs:
                     pathType: Prefix
           EOF
           
-          helm template test-release charts/kube-web-log-viewer -f /tmp/test-values.yaml > /tmp/custom-output.yaml
+          helm template test-release charts/logpilot -f /tmp/test-values.yaml > /tmp/custom-output.yaml
           
           echo "Default values template generated successfully"
           echo "Custom values template generated successfully"

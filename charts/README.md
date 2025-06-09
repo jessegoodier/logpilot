@@ -1,6 +1,6 @@
-# Kube Web Log Viewer Helm Chart
+# logPilot Helm Chart
 
-Helm chart for deploying the Kubernetes Web Log Viewer - a simple Kubernetes pod log viewer web app.
+Helm chart for deploying the logPilot - a simple Kubernetes pod log viewer web app.
 
 Give direct log access to your software engineers to see the logs without giving them access to the kubeconfig or other centralized log tools.
 
@@ -10,33 +10,33 @@ This application is designed to only monitor logs of pods in the namespace it is
 
 ### Install from web
 
-The name of the chart is web-viewer. The recommended release name is `<namespace>-log`
+The name of the chart is logpilot. The recommended release name is `<namespace>-log`
 
 If you use this naming, the command:
 ```sh
 helm install kube-system-log \
-  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer \
+  --repo https://jessegoodier.github.io/logpilot logpilot \
   -n kube-system
 ```
 
 Will result in a Deployment named:
 
-`kube-system-log-web-viewer`
+`kube-system-log-logpilot`
 
 Install using the default values:
 
 ```sh
 # Install with default settings
 helm install NAMESPACE-log \
-  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer
+  --repo https://jessegoodier.github.io/logpilot logpilot
 ```
 
 Disable retaining logs of pods that have been terminated:
 
 ```sh
 # Install with custom values
-helm install kube-web-log-viewer \
-  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer \
+helm install logpilot \
+  --repo https://jessegoodier.github.io/logpilot logpilot \
   --set previousPodLogs.enabled=false
 ```
 
@@ -44,8 +44,8 @@ Persist logs on restart:
 
 ```sh
 # Install with persistent storage
-helm install kube-web-log-viewer \
-  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer \
+helm install logpilot \
+  --repo https://jessegoodier.github.io/logpilot logpilot \
   --set storage.type=persistentVolume \
   --set storage.persistentVolume.size=10Gi
 ```
@@ -132,8 +132,8 @@ resources:
 Then install with:
 
 ```bash
-helm install kube-web-log-viewer \
-  --repo https://jessegoodier.github.io/kube-web-log-viewer web-viewer \
+helm install logpilot \
+  --repo https://jessegoodier.github.io/logpilot logpilot \
   -f custom-values.yaml
 ```
 
@@ -179,4 +179,4 @@ API key authentication is optional but recommended when exposing the ingress.
 
 ## Contributing
 
-For issues and contributions, please visit the [GitHub repository](https://github.com/jessegoodier/kube-web-log-viewer).
+For issues and contributions, please visit the [GitHub repository](https://github.com/jessegoodier/logpilot).

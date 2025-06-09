@@ -57,12 +57,12 @@ def wait_for_pods():
 
 
 def start_port_forward():
-    """Start port forwarding to the kube-log-viewer-service."""
+    """Start port forwarding to the logpilot-service."""
     print("Starting port forwarding...")
     cmd = [
         "kubectl",
         "port-forward",
-        "svc/kube-web-log-viewer-service",
+        "svc/logpilot-service",
         "5001:5001",
         "--address",
         "0.0.0.0",

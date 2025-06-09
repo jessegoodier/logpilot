@@ -138,9 +138,9 @@ jobs:
           kubectl create ns log-viewer-testing
           kubectl -n log-viewer-testing create -f tests/log-gen-deployment.yaml
 
-      - name: Install kube-web-log-viewer
+      - name: Install logpilot
         run: |
-          kubectl create configmap kube-web-log-viewer \
+          kubectl create configmap logpilot \
             --from-file=src/main.py \
             --from-file=src/log_archiver.py \
             --from-file=src/index.html \
@@ -149,11 +149,11 @@ jobs:
           kubectl apply -f k8s/ -n log-viewer-testing
 
       - name: Wait for ready
-        run: kubectl wait -n log-viewer-testing --for=condition=ready pod --selector app.kubernetes.io/name=kube-web-log-viewer --timeout=120s
+        run: kubectl wait -n log-viewer-testing --for=condition=ready pod --selector app.kubernetes.io/name=logpilot --timeout=120s
 
       - name: Start port forwarding
         run: |
-          kubectl port-forward -n log-viewer-testing svc/kube-web-log-viewer-service 5001:5001 --address 0.0.0.0 > /dev/null 2>&1 &
+          kubectl port-forward -n log-viewer-testing svc/logpilot-service 5001:5001 --address 0.0.0.0 > /dev/null 2>&1 &
           echo $! > /tmp/port-forward.pid
           # Wait for port to be ready
           timeout 30s bash -c 'until nc -z localhost 5001; do sleep 1; done'
