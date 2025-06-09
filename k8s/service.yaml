@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: kube-web-log-viewer-service
+  name: logpilot-service
   # namespace: your-target-namespace
   labels:
-    app.kubernetes.io/name: kube-web-log-viewer
+    app.kubernetes.io/name: logpilot
 spec:
   selector:
-    app.kubernetes.io/name: kube-web-log-viewer
+    app.kubernetes.io/name: logpilot
   ports:
   - name: http
     protocol: TCP

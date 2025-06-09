@@ -1,26 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kube-web-log-viewer-deployment
+  name: logpilot-deployment
   # namespace: your-target-namespace
   labels:
-    app.kubernetes.io/name: kube-web-log-viewer
+    app.kubernetes.io/name: logpilot
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app.kubernetes.io/name: kube-web-log-viewer
+      app.kubernetes.io/name: logpilot
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: kube-web-log-viewer
+        app.kubernetes.io/name: logpilot
     spec:
-      serviceAccountName: kube-web-log-viewer-sa
+      serviceAccountName: logpilot-sa
       terminationGracePeriodSeconds: 2
       containers:
-      - name: kube-web-log-viewer-container
+      - name: logpilot-container
         image: python:3.13-slim
         command: ["/bin/sh", "-c"]
         args: ["pip install -e /app --break-system-packages && python /app/main.py"]
@@ -78,7 +78,7 @@ spec:
       volumes:
       - name: log-viewer-config
         configMap:
-          name: kube-web-log-viewer
+          name: logpilot
       - name: log-dir
         # when using emptyDir, the logs are not persisted across pod restarts
         emptyDir: {}

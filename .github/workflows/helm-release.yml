@@ -70,16 +70,16 @@ jobs:
     - name: Sync source files to chart
       run: |
         # Ensure chart src directory exists
-        mkdir -p charts/kube-web-log-viewer/src
+        mkdir -p charts/logpilot/src
 
         # Copy source files to chart directory
-        cp -r src/* charts/kube-web-log-viewer/src/
-        cp pyproject.toml charts/kube-web-log-viewer/
+        cp -r src/* charts/logpilot/src/
+        cp pyproject.toml charts/logpilot/
 
         # Verify files were copied
         echo "Files in chart directory:"
-        ls -la charts/kube-web-log-viewer/
-        ls -la charts/kube-web-log-viewer/src/
+        ls -la charts/logpilot/
+        ls -la charts/logpilot/src/
 
     - name: Validate version is greater than latest release
       run: |
@@ -138,18 +138,18 @@ jobs:
     - name: Run Helm tests before packaging
       run: |
         echo "Running Helm unit tests..."
-        helm unittest charts/kube-web-log-viewer
+        helm unittest charts/logpilot
         
         echo "Running Helm lint..."
-        helm lint charts/kube-web-log-viewer
+        helm lint charts/logpilot
         
         echo "Testing template generation..."
-        helm template test-release charts/kube-web-log-viewer > /dev/null
+        helm template test-release charts/logpilot > /dev/null
         echo "All Helm tests passed!"
 
     - name: Package Helm chart
       run: |
-        helm package charts/kube-web-log-viewer --destination dist/
+        helm package charts/logpilot --destination dist/
         echo "Packaged charts:"
         ls -la dist/
 

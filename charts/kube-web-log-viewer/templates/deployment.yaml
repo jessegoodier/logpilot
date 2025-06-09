@@ -1,31 +1,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "kube-web-log-viewer.fullname" . }}
+  name: {{ include "logpilot.fullname" . }}
   labels:
-    {{- include "kube-web-log-viewer.labels" . | nindent 4 }}
+    {{- include "logpilot.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      {{- include "kube-web-log-viewer.selectorLabels" . | nindent 6 }}
+      {{- include "logpilot.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
-        checksum/config: {{ include "kube-web-log-viewer.configMapChecksum" . }}
+        checksum/config: {{ include "logpilot.configMapChecksum" . }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "kube-web-log-viewer.selectorLabels" . | nindent 8 }}
+        {{- include "logpilot.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "kube-web-log-viewer.serviceAccountName" . }}
+      serviceAccountName: {{ include "logpilot.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
@@ -86,11 +86,11 @@ spec:
       volumes:
       - name: log-viewer-config
         configMap:
-          name: {{ include "kube-web-log-viewer.fullname" . }}-config
+          name: {{ include "logpilot.fullname" . }}-config
       - name: log-dir
         {{- if eq .Values.storage.type "persistentVolume" }}
         persistentVolumeClaim:
-          claimName: {{ include "kube-web-log-viewer.fullname" . }}-pvc
+          claimName: {{ include "logpilot.fullname" . }}-pvc
         {{- else }}
         emptyDir: {}
         {{- end }}

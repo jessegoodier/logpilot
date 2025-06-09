@@ -39,14 +39,14 @@ ingress:
   annotations: {}
   ingressClassName: ""
   hosts:
-    - host: kube-web-log-viewer.local
+    - host: logpilot.local
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - kube-web-log-viewer.local
-      secretName: kube-web-log-viewer-tls
+        - logpilot.local
+      secretName: logpilot-tls
 
 nameOverride: ""
 fullnameOverride: ""

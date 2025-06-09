@@ -16,7 +16,7 @@ ACTION_TIMEOUT = 5000  # 5 seconds for general actions
 
 def test_log_viewer_e2e(page: Page):
     """
-    End-to-end test for the Kubernetes Log Viewer.
+    End-to-end test for logPilot.
     1. Navigates to the app.
     2. Waits for pod list to load and finds the log-gen pod.
     3. Selects the log-gen pod.

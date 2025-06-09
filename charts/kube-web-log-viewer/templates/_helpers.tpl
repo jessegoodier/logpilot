@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "kube-web-log-viewer.name" -}}
+{{- define "logpilot.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "kube-web-log-viewer.fullname" -}}
+{{- define "logpilot.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -26,16 +26,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "kube-web-log-viewer.chart" -}}
+{{- define "logpilot.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "kube-web-log-viewer.labels" -}}
-helm.sh/chart: {{ include "kube-web-log-viewer.chart" . }}
-{{ include "kube-web-log-viewer.selectorLabels" . }}
+{{- define "logpilot.labels" -}}
+helm.sh/chart: {{ include "logpilot.chart" . }}
+{{ include "logpilot.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -45,17 +45,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "kube-web-log-viewer.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "kube-web-log-viewer.name" . }}
+{{- define "logpilot.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "logpilot.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "kube-web-log-viewer.serviceAccountName" -}}
+{{- define "logpilot.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "kube-web-log-viewer.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "logpilot.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
@@ -65,7 +65,7 @@ Create the name of the service account to use
 {{- . | replace "../../src/" "" | replace "/" "-" -}}
 {{- end -}}
 
-{{- define "kube-web-log-viewer.configMapChecksum" -}}
+{{- define "logpilot.configMapChecksum" -}}
 {{- .Files.Get "src/main.py" | sha256sum }}
 {{- .Files.Get "src/log_archiver.py" | sha256sum }}
 {{- .Files.Get "src/index.html" | sha256sum }}

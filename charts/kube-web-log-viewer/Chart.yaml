@@ -1,6 +1,6 @@
 apiVersion: v2
-name: web-viewer
-description: A Helm chart for Kubernetes Web Log Viewer
+name: logpilot
+description: A Helm chart for logPilot
 type: application
 version: 0.0.0-dev
 appVersion: "0.0.0-dev"
@@ -9,12 +9,12 @@ keywords:
   - logs
   - monitoring
   - web
-home: https://github.com/jessegoodier/kube-web-log-viewer
+home: https://github.com/jessegoodier/logPilot
 sources:
-  - https://github.com/jessegoodier/kube-web-log-viewer
+  - https://github.com/jessegoodier/logPilot
 maintainers:
   - name: Jesse Goodier
     email: 31039225+jessegoodier@users.noreply.github.com
 annotations:
   category: Monitoring
-icon: https://raw.githubusercontent.com/jessegoodier/kube-web-log-viewer/main/icon.png
+icon: https://raw.githubusercontent.com/jessegoodier/logPilot/main/icon.png
