@@ -123,6 +123,10 @@ Testing is done with [Playwright](https://playwright.dev/).
 
 The tests assume that the test "log-gen" pod is running in the namespace where the app is deployed.
 
+For detailed testing instructions, local development setup, and troubleshooting, see the [Testing Guide](tests/README.md).
+
+### Quick Start
+
 To install development dependencies:
 
 ```sh

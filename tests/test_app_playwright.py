@@ -299,9 +299,9 @@ def test_sort_order_functionality(page: Page):
         if len(newest_first_timestamps) > 1 and len(oldest_first_timestamps) > 1:
             assert newest_first_timestamps != oldest_first_timestamps, "Sort order should change timestamps order"
             # First timestamp in newest-first should be newer than first in oldest-first
-            assert (
-                newest_first_timestamps[0] >= oldest_first_timestamps[0]
-            ), "Newest first should show newer logs at top"
+            assert newest_first_timestamps[0] >= oldest_first_timestamps[0], (
+                "Newest first should show newer logs at top"
+            )
 
         # Test 3: Check if archived pods are available
         archived_pod_options = pod_selector.locator("optgroup[label='Archived Pods'] option")
