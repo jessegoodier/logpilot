@@ -59,7 +59,7 @@ jobs:
         echo "Current version: $CURRENT_VERSION"
         
         # Update .bumpversion.cfg with current version
-        sed -i "s/current_version = .*/current_version = $CURRENT_VERSION/" .bumpversion.cfg
+        sed -i "s/current_version = .*/current_version = $CURRENT_VERSION/" .github/bumpversion.cfg
         
         # Calculate target version
         if [ "${{ github.event.inputs.version_bump }}" = "custom" ]; then
@@ -71,12 +71,12 @@ jobs:
           echo "Using custom version: $TARGET_VERSION"
           
           # For custom version, update files directly
-          bump2version --new-version="$TARGET_VERSION" --allow-dirty patch
+          bump2version --config-file=.github/bumpversion.cfg --new-version="$TARGET_VERSION" --allow-dirty patch
         else
           # Use bump2version for standard bumps
           echo "Performing ${{ github.event.inputs.version_bump }} version bump"
-          bump2version --allow-dirty ${{ github.event.inputs.version_bump }}
-          TARGET_VERSION=$(grep "current_version" .bumpversion.cfg | cut -d' ' -f3)
+          bump2version --config-file=.github/bumpversion.cfg --allow-dirty ${{ github.event.inputs.version_bump }}
+          TARGET_VERSION=$(grep "current_version" .github/bumpversion.cfg | cut -d' ' -f3)
         fi
         
         echo "Target version: $TARGET_VERSION"
