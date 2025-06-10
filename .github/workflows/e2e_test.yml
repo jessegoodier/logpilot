@@ -157,7 +157,7 @@ jobs:
           playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        run: pytest tests/test_app_playwright.py --browser chromium --timeout=300
+        run: pytest tests/test_app_playwright.py --browser chromium
         env:
           PYTHONPATH: .
           TEST_BASE_URL: "http://localhost:5001"
