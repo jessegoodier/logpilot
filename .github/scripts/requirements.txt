@@ -1,0 +1,5 @@
+requests
+packaging
+bump2version
+ruff
+isort
