@@ -33,10 +33,9 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Install bump2version
+    - name: Install uv
       run: |
-        python -m pip install --upgrade pip
-        pip install bump2version requests
+        python -m pip install uv --break-system-packages
 
     - name: Configure Git
       run: |
@@ -46,77 +45,19 @@ jobs:
     - name: Get current and target version
       id: version
       run: |
-        # Get current version from latest GitHub release
-        CURRENT_VERSION=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | python -c "
-        import json, sys
-        try:
-            data = json.load(sys.stdin)
-            print(data.get('tag_name', 'v0.0.0').lstrip('v'))
-        except:
-            print('0.0.0')
-        ")
-        
-        echo "Current version: $CURRENT_VERSION"
-        
-        # Update .bumpversion.cfg with current version
-        sed -i "s/current_version = .*/current_version = $CURRENT_VERSION/" .github/bumpversion.cfg
-        
-        # Calculate target version
-        if [ "${{ github.event.inputs.version_bump }}" = "custom" ]; then
-          if [ -z "${{ github.event.inputs.custom_version }}" ]; then
-            echo "❌ Error: Custom version is required when version_bump=custom"
-            exit 1
-          fi
-          TARGET_VERSION="${{ github.event.inputs.custom_version }}"
-          echo "Using custom version: $TARGET_VERSION"
-          
-          # For custom version, update files directly
-          bump2version --config-file=.github/bumpversion.cfg --new-version="$TARGET_VERSION" --allow-dirty patch
-        else
-          # Use bump2version for standard bumps
-          echo "Performing ${{ github.event.inputs.version_bump }} version bump"
-          bump2version --config-file=.github/bumpversion.cfg --allow-dirty ${{ github.event.inputs.version_bump }}
-          TARGET_VERSION=$(grep "current_version" .github/bumpversion.cfg | cut -d' ' -f3)
-        fi
-        
-        echo "Target version: $TARGET_VERSION"
-        
-        # Validate version is greater than current
-        python - <<EOF
-        from packaging import version
-        current = "$CURRENT_VERSION"
-        target = "$TARGET_VERSION"
-        
-        if version.Version(target) <= version.Version(current):
-            print(f"❌ Error: Target version {target} must be greater than current version {current}")
-            exit(1)
-        else:
-            print(f"✅ Version {target} is valid and greater than {current}")
-        EOF
-        
-        # Output versions for later steps
-        echo "version=$TARGET_VERSION" >> $GITHUB_OUTPUT
-        echo "current-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
-        
-        # Show version suggestions
-        python - <<EOF
-        parts = "$CURRENT_VERSION".split('.')
-        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
-        
-        print("")
-        print("🚀 VERSION SUGGESTIONS 🚀")
-        print("==========================")
-        print(f"📦 Patch: {major}.{minor}.{patch + 1}")
-        print(f"✨ Minor: {major}.{minor + 1}.0")
-        print(f"🔥 Major: {major + 1}.0.0")
-        print("")
-        print(f"ℹ️  Selected version: $TARGET_VERSION")
-        EOF
+        uv venv
+        source .venv/bin/activate
+        uv pip install -e '.[dev]'
+        python .github/scripts/version_manager.py
+      env:
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        INPUT_VERSION_BUMP: ${{ github.event.inputs.version_bump }}
+        INPUT_CUSTOM_VERSION: ${{ github.event.inputs.custom_version }}
 
     - name: Setup Helm
       uses: azure/setup-helm@v3
       with:
-        version: '3.12.0'
+        version: '3.17.3'
 
     - name: Install helm-unittest plugin
       run: |
