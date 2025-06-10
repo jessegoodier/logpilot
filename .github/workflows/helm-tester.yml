@@ -1,18 +1,10 @@
-name: Helm Unit Tests
+name: Helm Tester
 
 on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'charts/**'
-      - '.github/workflows/helm-test.yml'
-  push:
-    branches:
-      - main
-    paths:
-      - 'charts/**'
-      - '.github/workflows/helm-test.yml'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
