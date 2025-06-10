@@ -1,15 +1,20 @@
+import json
+import logging
 import os
 import re
-from flask import Flask, jsonify, request, send_from_directory, redirect
+from functools import wraps
+
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template_string,
+    request,
+    send_from_directory,
+    session,
+)
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
-import logging
-from functools import wraps
-from flask import (
-    session,
-    render_template_string,
-)
-import json
 
 # --- Version Configuration ---
 __version__ = os.environ.get("APP_VERSION", "0.0.0-dev")
