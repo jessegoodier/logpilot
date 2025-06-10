@@ -9,6 +9,9 @@ The following commands are safe to run automatically without asking for permissi
 ### Read-only Operations
 - `git status`, `git log`, `git diff`, `git show`
 - `gh run list`, `gh run view`
+- `gh run view <run-id>` (view specific workflow run details)
+- `gh run view <run-id> --log` (view full logs including successful steps)
+- `gh run view <run-id> --log-failed` (view logs from failed steps only)
 - `cat`, `head`, `tail`, `ls`, file reading operations
 - `kubectl get`, `kubectl describe` (read-only kubectl commands)
 - `helm list`, `helm status` (read-only helm commands)
@@ -27,6 +30,17 @@ The following commands are safe to run automatically without asking for permissi
 ### Environment Setup
 - `uv venv` (create virtual environment)
 - `source .venv/bin/activate` (activate virtual environment)
+- `mkdir -p temp/` (create temp directory)
+- `git checkout` (checkout any branch)
+- `git pull origin` (pull any branch)
+- `git checkout -b fix/new-branch-name` (create new branch)
+- `git cherry-pick <commit-hash>` (cherry-pick commits)
+- `gh pr view --json state --jq .state` (check PR state)
+- `git reset HEAD <file>` (unstage files)
+- `mv <source> <destination>` (move/rename files)
+- `git add <files>` (stage files for commit)
+- `git push -u origin <branch-name>` (push new branch to remote)
+- `gh pr create` (create pull request)
 
 ### Analysis Commands
 - `find`, `grep`, `rg` (ripgrep), search operations
