@@ -15,8 +15,11 @@ The following commands are safe to run automatically without asking for permissi
 
 ### Code Quality & Testing
 - `uv pip install -e ".[dev]"` (in virtual environment)
-- `ruff check .` (without --fix flag)
-- `ruff format . --check` (check-only mode)
+- `ruff check .` (linting check)
+- `ruff check . --fix` (auto-fix linting issues)
+- `ruff format .` (auto-format code)  
+- `ruff format . --check` (check formatting status)
+- `uvx black .` (additional formatting if needed)
 - `pytest --collect-only` (test collection without running)
 - `playwright install` (browser installation)
 
@@ -67,21 +70,43 @@ git status
 2. **Working directory**: Are we in the right project?
 3. **Changes**: Do the changes make sense for this branch?
 
-### Safety Commands to Run Before Committing:
+### Pre-Commit Code Quality Workflow:
+ALWAYS run this complete workflow before ANY commit or PR:
+
 ```bash
-# Essential safety checks
+# 1. Essential safety checks
 git branch --show-current                          # What branch am I on?
 gh pr view --json state --jq .state 2>/dev/null  # Is PR already merged?
 git log --oneline main..HEAD                      # What commits are ahead of main?
 git status                                         # What am I about to commit?
 
-# If branch is merged, create new branch instead
+# 2. If branch is merged, create new branch instead
 if [ "$(gh pr view --json state --jq .state 2>/dev/null)" = "MERGED" ]; then
     echo "⚠️ Current branch PR is merged! Create new branch."
     echo "Run: git checkout main && git pull && git checkout -b fix/new-branch-name"
     exit 1
 fi
+
+# 3. MANDATORY: Fix all code quality issues
+source .venv/bin/activate  # Ensure virtual environment is active
+
+# Run ruff linter and fix issues
+ruff check . --fix
+
+# Run ruff formatter
+ruff format .
+
+# Run black formatter (if different from ruff format)
+uvx black .
+
+# Verify everything is clean
+ruff check .              # Should show "All checks passed!"
+ruff format . --check     # Should show "X files already formatted"
+
+echo "✅ Code quality checks completed - ready to commit!"
 ```
+
+### Never commit without running code quality fixes first!
 
 ### Recovery from Merged Branch Commits:
 If commits were made to a merged branch:
