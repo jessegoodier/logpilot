@@ -15,9 +15,12 @@ The following commands are safe to run automatically without asking for permissi
 
 ### Code Quality & Testing
 - `uv pip install -e ".[dev]"` (in virtual environment)
-- `ruff check .`
-- `ruff format . --check` (check-only mode)
-- `ruff check . --fix`, `ruff format .` (code modification)
+- `isort .` (fix import ordering)
+- `isort . --check-only` (check import ordering)
+- `ruff check .` (linting check)
+- `ruff check . --fix` (auto-fix linting issues)
+- `ruff format .` (auto-format code - replaces black)  
+- `ruff format . --check` (check formatting status)
 - `pytest --collect-only` (test collection without running)
 - `playwright install` (browser installation)
 
@@ -36,8 +39,24 @@ The following commands are safe to run automatically without asking for permissi
 
 ## Commands That Require Permission
 
+### Git Operations - Always Check First
+Before any git commits, ALWAYS run these safety checks:
+```bash
+# Check if current branch is already merged
+gh pr view --json state --jq .state 2>/dev/null || echo "No PR found"
+
+# Check if working on merged branch 
+git branch -r --merged main | grep $(git branch --show-current) && echo "⚠️ BRANCH ALREADY MERGED!"
+
+# Check current branch and status
+git branch --show-current
+git status
+```
+
 ### Modifying Operations
-- `git add`, `git commit`, `git push` (always ask before committing)
+
+- `git add`, `git commit`, `git push` (always ask before committing AND check if branch is merged)
+- `ruff check . --fix`, `ruff format .` (code modification) 
 - `kubectl apply`, `kubectl create`, `kubectl delete` (cluster changes)
 - `helm install`, `helm upgrade`, `helm uninstall` (deployment changes)
 
@@ -46,6 +65,70 @@ The following commands are safe to run automatically without asking for permissi
 - `sudo` commands
 - Package installation outside virtual environments
 - Network operations that modify state
+
+## Git Safety Rules
+
+### Before ANY git commit, check:
+1. **Branch status**: Is this branch already merged?
+2. **Working directory**: Are we in the right project?
+3. **Changes**: Do the changes make sense for this branch?
+
+### Pre-Commit Code Quality Workflow:
+ALWAYS run this complete workflow before ANY commit or PR:
+
+```bash
+# 1. Essential safety checks
+git branch --show-current                          # What branch am I on?
+gh pr view --json state --jq .state 2>/dev/null  # Is PR already merged?
+git log --oneline main..HEAD                      # What commits are ahead of main?
+git status                                         # What am I about to commit?
+
+# 2. If branch is merged, create new branch instead
+if [ "$(gh pr view --json state --jq .state 2>/dev/null)" = "MERGED" ]; then
+    echo "⚠️ Current branch PR is merged! Create new branch."
+    echo "Run: git checkout main && git pull && git checkout -b fix/new-branch-name"
+    exit 1
+fi
+
+# 3. MANDATORY: Fix all code quality issues
+source .venv/bin/activate  # Ensure virtual environment is active
+
+# Fix import ordering
+isort .
+
+# Run ruff linter and fix issues
+ruff check . --fix
+
+# Run ruff formatter (replaces black - faster and consistent)
+ruff format .
+
+# Verify everything is clean
+ruff check .              # Should show "All checks passed!"
+ruff format . --check     # Should show "X files already formatted"
+isort . --check-only      # Should show no changes needed
+
+echo "✅ Code quality checks completed - ready to commit!"
+```
+
+### Never commit without running code quality fixes first!
+
+### Recovery from Merged Branch Commits:
+If commits were made to a merged branch:
+```bash
+# 1. Check out main and pull latest
+git checkout main
+git pull origin main
+
+# 2. Create new branch from main
+git checkout -b fix/new-branch-name
+
+# 3. Cherry-pick the commits you want to keep
+git cherry-pick <commit-hash>
+
+# 4. Push new branch and create fresh PR
+git push -u origin fix/new-branch-name
+gh pr create --title "Title" --body "Description"
+```
 
 ## Development Commands
 
@@ -59,11 +142,14 @@ uv pip install -e ".[dev]"
 
 ### Code Quality
 ```bash
-# Format code with black
-uvx black .
+# Fix import ordering
+uvx isort .
 
-# Run ruff linter
+# Run ruff linter and fix issues
 uvx ruff check --fix .
+
+# Format code with ruff (replaces black for consistency)
+uvx ruff format .
 ```
 
 ### Testing

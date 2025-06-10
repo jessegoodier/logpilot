@@ -152,12 +152,12 @@ jobs:
           echo "Port forwarding is ready"
 
       - name: Install Playwright
-        uses: microsoft/playwright-github-action@v1
-        with:
-          browsers: chromium
+        run: |
+          # Install Playwright browsers and dependencies using Python Playwright
+          playwright install --with-deps chromium
 
       - name: Run Playwright tests
-        run: pytest tests/test_app_playwright.py --browser chromium --timeout=300
+        run: pytest tests/test_app_playwright.py --browser chromium
         env:
           PYTHONPATH: .
           TEST_BASE_URL: "http://localhost:5001"

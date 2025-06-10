@@ -1,8 +1,9 @@
+import os
 import re
+import time
+
 import pytest
 from playwright.sync_api import Page, expect
-import time
-import os
 
 # Define the base URL of the application
 APP_BASE_URL = "http://localhost:5001"
