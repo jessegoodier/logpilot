@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
-import time
-from kubernetes import client, config
 import subprocess
 import sys
+import time
+
+from kubernetes import client, config
 
 
 def get_current_namespace():

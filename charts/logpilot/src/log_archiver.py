@@ -1,11 +1,12 @@
+import logging
 import os
+import threading
 import time
 from datetime import datetime, timedelta, timezone
-import threading
-from kubernetes.client.rest import ApiException
-import logging
-from kubernetes import client
+
 import requests
+from kubernetes import client
+from kubernetes.client.rest import ApiException
 
 
 def delete_old_logs(log_dir, max_age_minutes, logger):
