@@ -159,11 +159,13 @@ jobs:
           timeout 30s bash -c 'until nc -z localhost 5001; do sleep 1; done'
           echo "Port forwarding is ready"
 
-      - name: Install Playwright browsers
-        run: playwright install --with-deps
+      - name: Install Playwright
+        uses: microsoft/playwright-github-action@v1
+        with:
+          browsers: chromium
 
       - name: Run Playwright tests
-        run: pytest tests/test_app_playwright.py
+        run: pytest tests/test_app_playwright.py --browser chromium --timeout=300
         env:
           PYTHONPATH: .
           TEST_BASE_URL: "http://localhost:5001"
