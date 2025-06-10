@@ -15,6 +15,8 @@ The following commands are safe to run automatically without asking for permissi
 
 ### Code Quality & Testing
 - `uv pip install -e ".[dev]"` (in virtual environment)
+- `isort .` (fix import ordering)
+- `isort . --check-only` (check import ordering)
 - `ruff check .` (linting check)
 - `ruff check . --fix` (auto-fix linting issues)
 - `ruff format .` (auto-format code - replaces black)  
@@ -89,6 +91,9 @@ fi
 # 3. MANDATORY: Fix all code quality issues
 source .venv/bin/activate  # Ensure virtual environment is active
 
+# Fix import ordering
+isort .
+
 # Run ruff linter and fix issues
 ruff check . --fix
 
@@ -98,6 +103,7 @@ ruff format .
 # Verify everything is clean
 ruff check .              # Should show "All checks passed!"
 ruff format . --check     # Should show "X files already formatted"
+isort . --check-only      # Should show no changes needed
 
 echo "✅ Code quality checks completed - ready to commit!"
 ```
@@ -134,6 +140,9 @@ uv pip install -e ".[dev]"
 
 ### Code Quality
 ```bash
+# Fix import ordering
+uvx isort .
+
 # Run ruff linter and fix issues
 uvx ruff check --fix .
 

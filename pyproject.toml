@@ -17,6 +17,7 @@ dev = [
     "pytest",
     "pytest-playwright",
     "ruff",
+    "isort",
 ]
 
 [build-system]
