@@ -19,7 +19,7 @@ tests:
           of: PersistentVolumeClaim
       - equal:
           path: metadata.name
-          value: RELEASE-NAME-web-viewer-pvc
+          value: RELEASE-NAME-logpilot-pvc
       - equal:
           path: spec.resources.requests.storage
           value: 20Gi

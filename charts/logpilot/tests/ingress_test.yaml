@@ -23,7 +23,7 @@ tests:
           of: Ingress
       - equal:
           path: metadata.name
-          value: RELEASE-NAME-web-viewer
+          value: RELEASE-NAME-logpilot
       - equal:
           path: spec.ingressClassName
           value: "nginx"
