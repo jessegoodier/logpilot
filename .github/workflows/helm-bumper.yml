@@ -47,7 +47,7 @@ jobs:
       run: |
         uv venv
         source .venv/bin/activate
-        uv pip install -e '.[dev]'
+        uv pip install -r .github/scripts/requirements.txt
         python .github/scripts/version_manager.py
       env:
         GITHUB_REPOSITORY: ${{ github.repository }}

@@ -18,7 +18,9 @@ dev = [
     "pytest-playwright",
     "ruff",
     "isort",
-]
+    "packaging",
+    "bump2version",
+  ]
 
 [build-system]
 requires = ["hatchling"]
