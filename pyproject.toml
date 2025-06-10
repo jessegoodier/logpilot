@@ -16,7 +16,6 @@ dev = [
     "gunicorn",
     "pytest",
     "pytest-playwright",
-    "black",
     "ruff",
 ]
 
@@ -31,16 +30,10 @@ packages = ["."]
 line-length = 119
 target-version = "py312"
 
-[tool.black]
-line-length = 119
-target-version = [
-  'py312',
-]
-
 # ==== isort ====
 
 [tool.isort]
-profile = "black"
+profile = "black"  # Keep black profile for isort compatibility
 line_length = 119
 known_first_party = [
   "tests",

@@ -17,9 +17,8 @@ The following commands are safe to run automatically without asking for permissi
 - `uv pip install -e ".[dev]"` (in virtual environment)
 - `ruff check .` (linting check)
 - `ruff check . --fix` (auto-fix linting issues)
-- `ruff format .` (auto-format code)  
+- `ruff format .` (auto-format code - replaces black)  
 - `ruff format . --check` (check formatting status)
-- `uvx black .` (additional formatting if needed)
 - `pytest --collect-only` (test collection without running)
 - `playwright install` (browser installation)
 
@@ -93,11 +92,8 @@ source .venv/bin/activate  # Ensure virtual environment is active
 # Run ruff linter and fix issues
 ruff check . --fix
 
-# Run ruff formatter
+# Run ruff formatter (replaces black - faster and consistent)
 ruff format .
-
-# Run black formatter (if different from ruff format)
-uvx black .
 
 # Verify everything is clean
 ruff check .              # Should show "All checks passed!"
@@ -138,11 +134,11 @@ uv pip install -e ".[dev]"
 
 ### Code Quality
 ```bash
-# Format code with black
-uvx black .
-
-# Run ruff linter
+# Run ruff linter and fix issues
 uvx ruff check --fix .
+
+# Format code with ruff (replaces black for consistency)
+uvx ruff format .
 ```
 
 ### Testing
