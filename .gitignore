@@ -177,3 +177,4 @@ build-*.sh
 temp/
 Pip*
 uv.lock
+gke_gcloud_auth_plugin_cache

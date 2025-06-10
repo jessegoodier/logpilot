@@ -62,7 +62,7 @@ jobs:
 
     - name: Install helm-unittest plugin
       run: |
-        helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.6.2
+        helm plugin install https://github.com/helm-unittest/helm-unittest
 
     - name: Create dist directory
       run: mkdir -p dist
