@@ -31,9 +31,23 @@ The following commands are safe to run automatically without asking for permissi
 
 ## Commands That Require Permission
 
+### Git Operations - Always Check First
+Before any git commits, ALWAYS run these safety checks:
+```bash
+# Check if current branch is already merged
+gh pr view --json state --jq .state 2>/dev/null || echo "No PR found"
+
+# Check if working on merged branch 
+git branch -r --merged main | grep $(git branch --show-current) && echo "⚠️ BRANCH ALREADY MERGED!"
+
+# Check current branch and status
+git branch --show-current
+git status
+```
+
 ### Modifying Operations
-- `git add`, `git commit`, `git push` (always ask before committing)
-- `ruff check . --fix`, `ruff format .` (code modification)
+- `git add`, `git commit`, `git push` (always ask before committing AND check if branch is merged)
+- `ruff check . --fix`, `ruff format .` (code modification) 
 - `kubectl apply`, `kubectl create`, `kubectl delete` (cluster changes)
 - `helm install`, `helm upgrade`, `helm uninstall` (deployment changes)
 
@@ -45,6 +59,47 @@ The following commands are safe to run automatically without asking for permissi
 - `sudo` commands
 - Package installation outside virtual environments
 - Network operations that modify state
+
+## Git Safety Rules
+
+### Before ANY git commit, check:
+1. **Branch status**: Is this branch already merged?
+2. **Working directory**: Are we in the right project?
+3. **Changes**: Do the changes make sense for this branch?
+
+### Safety Commands to Run Before Committing:
+```bash
+# Essential safety checks
+git branch --show-current                          # What branch am I on?
+gh pr view --json state --jq .state 2>/dev/null  # Is PR already merged?
+git log --oneline main..HEAD                      # What commits are ahead of main?
+git status                                         # What am I about to commit?
+
+# If branch is merged, create new branch instead
+if [ "$(gh pr view --json state --jq .state 2>/dev/null)" = "MERGED" ]; then
+    echo "⚠️ Current branch PR is merged! Create new branch."
+    echo "Run: git checkout main && git pull && git checkout -b fix/new-branch-name"
+    exit 1
+fi
+```
+
+### Recovery from Merged Branch Commits:
+If commits were made to a merged branch:
+```bash
+# 1. Check out main and pull latest
+git checkout main
+git pull origin main
+
+# 2. Create new branch from main
+git checkout -b fix/new-branch-name
+
+# 3. Cherry-pick the commits you want to keep
+git cherry-pick <commit-hash>
+
+# 4. Push new branch and create fresh PR
+git push -u origin fix/new-branch-name
+gh pr create --title "Title" --body "Description"
+```
 
 ## Development Commands
 
