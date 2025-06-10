@@ -15,8 +15,9 @@ The following commands are safe to run automatically without asking for permissi
 
 ### Code Quality & Testing
 - `uv pip install -e ".[dev]"` (in virtual environment)
-- `ruff check .` (without --fix flag)
+- `ruff check .`
 - `ruff format . --check` (check-only mode)
+- `ruff check . --fix`, `ruff format .` (code modification)
 - `pytest --collect-only` (test collection without running)
 - `playwright install` (browser installation)
 
@@ -29,17 +30,17 @@ The following commands are safe to run automatically without asking for permissi
 - `wc`, `sort`, `uniq` (text processing)
 - `docker images`, `docker ps` (read-only docker commands)
 
+### Test Execution
+- `pytest` (low enough risk here)
+- `uv run pytest` (test execution)
+
 ## Commands That Require Permission
 
 ### Modifying Operations
 - `git add`, `git commit`, `git push` (always ask before committing)
-- `ruff check . --fix`, `ruff format .` (code modification)
 - `kubectl apply`, `kubectl create`, `kubectl delete` (cluster changes)
 - `helm install`, `helm upgrade`, `helm uninstall` (deployment changes)
 
-### Test Execution
-- `pytest` (actual test execution - may have side effects)
-- `uv run pytest` (test execution)
 
 ### System Operations
 - `sudo` commands
@@ -174,7 +175,7 @@ rm ruff-*.json ruff-*.txt
 ### Common GitHub Actions Issues
 
 #### Ruff Command Issues
-- **Problem**: `ruff format` doesn't support `--output-format=json` 
+- **Problem**: `ruff format` doesn't support `--output-format=json`
 - **Solution**: Use `ruff format . --check --diff` for checking formatting status
 - **Test locally**: Run the exact commands from the workflow to verify syntax
 
@@ -183,7 +184,7 @@ rm ruff-*.json ruff-*.txt
 - **Solution**: Use `microsoft/playwright-github-action@v1` with explicit browser specification
 - **Test locally**: `playwright install chromium` and verify test collection
 
-#### Kubernetes Testing Issues  
+#### Kubernetes Testing Issues
 - **Problem**: Timing issues with pod readiness or port forwarding
 - **Solution**: Add proper wait conditions and readiness checks
 - **Test locally**: Verify kubectl commands work with your cluster
