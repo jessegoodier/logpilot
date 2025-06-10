@@ -3,10 +3,20 @@ name: Release Helm Chart
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to release (e.g. 0.3.2 for patch, 0.4.0 for minor)"
+      version_bump:
+        description: "Version bump type"
         required: true
-        default: "0.3.2"
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+      custom_version:
+        description: "Custom version (only used if version_bump=custom, e.g. 0.3.2)"
+        required: false
+        default: ""
 
 jobs:
   helm-release:
@@ -18,42 +28,90 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Calculate suggested next version
-      id: next-version
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install bump2version
       run: |
-        echo "Calculating suggested next version..."
+        python -m pip install --upgrade pip
+        pip install bump2version requests
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+
+    - name: Get current and target version
+      id: version
+      run: |
+        # Get current version from latest GitHub release
+        CURRENT_VERSION=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | python -c "
+        import json, sys
+        try:
+            data = json.load(sys.stdin)
+            print(data.get('tag_name', 'v0.0.0').lstrip('v'))
+        except:
+            print('0.0.0')
+        ")
         
-        # Get the latest release version from GitHub API
-        LATEST_RELEASE=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r '.tag_name // "v0.0.0"' | sed 's/^v//')
-        echo "Latest released version: $LATEST_RELEASE"
+        echo "Current version: $CURRENT_VERSION"
         
-        # Calculate next patch version
-        IFS='.' read -ra VERSION_PARTS <<< "$LATEST_RELEASE"
-        MAJOR=${VERSION_PARTS[0]:-0}
-        MINOR=${VERSION_PARTS[1]:-0}
-        PATCH=${VERSION_PARTS[2]:-0}
+        # Update .bumpversion.cfg with current version
+        sed -i "s/current_version = .*/current_version = $CURRENT_VERSION/" .bumpversion.cfg
         
-        # Increment patch version
-        NEXT_PATCH=$((PATCH + 1))
-        SUGGESTED_VERSION="$MAJOR.$MINOR.$NEXT_PATCH"
+        # Calculate target version
+        if [ "${{ github.event.inputs.version_bump }}" = "custom" ]; then
+          if [ -z "${{ github.event.inputs.custom_version }}" ]; then
+            echo "❌ Error: Custom version is required when version_bump=custom"
+            exit 1
+          fi
+          TARGET_VERSION="${{ github.event.inputs.custom_version }}"
+          echo "Using custom version: $TARGET_VERSION"
+          
+          # For custom version, update files directly
+          bump2version --new-version="$TARGET_VERSION" --allow-dirty patch
+        else
+          # Use bump2version for standard bumps
+          echo "Performing ${{ github.event.inputs.version_bump }} version bump"
+          bump2version --allow-dirty ${{ github.event.inputs.version_bump }}
+          TARGET_VERSION=$(grep "current_version" .bumpversion.cfg | cut -d' ' -f3)
+        fi
         
-        echo "Suggested next version: $SUGGESTED_VERSION"
-        echo "suggested-version=$SUGGESTED_VERSION" >> $GITHUB_OUTPUT
+        echo "Target version: $TARGET_VERSION"
         
-        # Also suggest next minor version
-        NEXT_MINOR=$((MINOR + 1))
-        SUGGESTED_MINOR="$MAJOR.$NEXT_MINOR.0"
-        echo "Suggested next minor version: $SUGGESTED_MINOR"
-        echo "suggested-minor=$SUGGESTED_MINOR" >> $GITHUB_OUTPUT
+        # Validate version is greater than current
+        python - <<EOF
+        from packaging import version
+        current = "$CURRENT_VERSION"
+        target = "$TARGET_VERSION"
         
-        echo ""
-        echo "🚀 VERSION SUGGESTIONS 🚀"
-        echo "=========================="
-        echo "📦 For a patch release (bug fixes): $SUGGESTED_VERSION"
-        echo "✨ For a minor release (new features): $SUGGESTED_MINOR"
-        echo "🔥 For a major release (breaking changes): $((MAJOR + 1)).0.0"
-        echo ""
-        echo "ℹ️  Requested version for this release: ${{ github.event.inputs.version }}"
+        if version.Version(target) <= version.Version(current):
+            print(f"❌ Error: Target version {target} must be greater than current version {current}")
+            exit(1)
+        else:
+            print(f"✅ Version {target} is valid and greater than {current}")
+        EOF
+        
+        # Output versions for later steps
+        echo "version=$TARGET_VERSION" >> $GITHUB_OUTPUT
+        echo "current-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        
+        # Show version suggestions
+        python - <<EOF
+        parts = "$CURRENT_VERSION".split('.')
+        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+        
+        print("")
+        print("🚀 VERSION SUGGESTIONS 🚀")
+        print("==========================")
+        print(f"📦 Patch: {major}.{minor}.{patch + 1}")
+        print(f"✨ Minor: {major}.{minor + 1}.0")
+        print(f"🔥 Major: {major + 1}.0.0")
+        print("")
+        print(f"ℹ️  Selected version: $TARGET_VERSION")
+        EOF
 
     - name: Setup Helm
       uses: azure/setup-helm@v3
@@ -81,59 +139,18 @@ jobs:
         ls -la charts/logpilot/
         ls -la charts/logpilot/src/
 
-    - name: Validate version is greater than latest release
+    - name: Verify version updates
       run: |
-        VERSION="${{ github.event.inputs.version }}"
-        echo "Validating that version $VERSION is greater than the latest released version..."
+        echo "=== Version Update Summary ==="
+        echo "Updated files with version ${{ steps.version.outputs.version }}:"
         
-        # Get the latest release version from GitHub API
-        LATEST_RELEASE=$(curl -s "https://api.github.com/repos/${{ github.repository }}/releases/latest" | jq -r '.tag_name // "v0.0.0"' | sed 's/^v//')
-        echo "Latest released version: $LATEST_RELEASE"
-        echo "Requested version: $VERSION"
+        # Show what files were updated
+        git diff --name-only || echo "No changes detected"
         
-        # Function to compare semantic versions
-        version_compare() {
-          # Split versions into arrays
-          IFS='.' read -ra VER1 <<< "$1"
-          IFS='.' read -ra VER2 <<< "$2"
-          
-          # Pad arrays to same length with zeros
-          while [ ${#VER1[@]} -lt 3 ]; do VER1+=(0); done
-          while [ ${#VER2[@]} -lt 3 ]; do VER2+=(0); done
-          
-          # Compare each component
-          for i in {0..2}; do
-            if [ ${VER1[i]} -gt ${VER2[i]} ]; then
-              return 0  # VER1 > VER2
-            elif [ ${VER1[i]} -lt ${VER2[i]} ]; then
-              return 1  # VER1 < VER2
-            fi
-          done
-          return 1  # VER1 == VER2
-        }
-        
-        # Compare versions
-        if version_compare "$VERSION" "$LATEST_RELEASE"; then
-          echo "✅ Version $VERSION is greater than latest release $LATEST_RELEASE"
-        else
-          echo "❌ Error: Version $VERSION must be greater than the latest release $LATEST_RELEASE"
-          echo "Please choose a version number greater than $LATEST_RELEASE"
-          exit 1
-        fi
-
-    - name: Update all version references
-      run: |
-        VERSION="${{ github.event.inputs.version }}"
-        echo "Setting version to: $VERSION across all files using update script"
-
-        # Make the update script executable and run it
-        chmod +x scripts/update-versions.sh
-        ./scripts/update-versions.sh "$VERSION"
-
-        # Show git diff to see what changed
+        # Show specific version changes
         echo ""
-        echo "=== Git diff showing version changes ==="
-        git diff --no-index /dev/null . | grep -E "^\+.*version|^\+.*__version__|^\+.*appVersion" || echo "No version changes detected in diff"
+        echo "=== Version References Found ==="
+        grep -r "${{ steps.version.outputs.version }}" . --include="*.py" --include="*.yaml" --include="*.yml" --include="*.toml" | head -10
 
     - name: Run Helm tests before packaging
       run: |
@@ -155,22 +172,25 @@ jobs:
 
     - name: Generate Helm repository index
       run: |
-        helm repo index dist/ --url https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/
+        helm repo index dist/ --url https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/
         echo "Generated index.yaml:"
         cat dist/index.yaml
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: v${{ github.event.inputs.version }}
-        name: Release v${{ github.event.inputs.version }}
+        tag_name: v${{ steps.version.outputs.version }}
+        name: Release v${{ steps.version.outputs.version }}
         files: dist/*.tgz
         generate_release_notes: true
-
-    - name: Setup Git for gh-pages
-      run: |
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
+        body: |
+          ## Release v${{ steps.version.outputs.version }}
+          
+          **Version Bump:** ${{ github.event.inputs.version_bump }}
+          **Previous Version:** ${{ steps.version.outputs.current-version }}
+          **New Version:** ${{ steps.version.outputs.version }}
+          
+          This release was created using bump2version for automated version management.
 
     - name: Deploy to gh-pages
       run: |
@@ -178,12 +198,12 @@ jobs:
         git checkout --orphan gh-pages || git checkout gh-pages
 
         # Remove all files except .git
-        git rm -rf .
+        git rm -rf . 2>/dev/null || true
 
         # Copy index.yaml to root
         cp dist/index.yaml .
 
         # Commit and push
         git add index.yaml
-        git commit -m "Update index.yaml for version v${{ github.event.inputs.version }}"
+        git commit -m "Update index.yaml for version v${{ steps.version.outputs.version }}"
         git push -f origin gh-pages
