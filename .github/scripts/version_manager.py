@@ -50,7 +50,7 @@ def get_target_version(version_bump: str, custom_version: Optional[str] = None, 
         return custom_version
 
     # Use bump-my-version to get the new version
-    print(f"Running bump-my-version with {version_bump}")
+    print(f"Running bump-my-version with {version_bump}", file=sys.stderr)
     # For bump-my-version, we use show-bump to get the target version
     # First, get the current version from the release step
     current_version_cmd = subprocess.run(
@@ -88,7 +88,7 @@ def get_target_version(version_bump: str, custom_version: Optional[str] = None, 
 
     # Now show what the bump would produce
     result = subprocess.run(["bump-my-version", "show-bump", current_ver], capture_output=True, text=True)
-    print(result.stdout)
+    print(result.stdout, file=sys.stderr)
 
     # Parse the tree output to get the target version
     import re
@@ -130,17 +130,17 @@ def show_version_suggestions(current: str, target: str) -> None:
 
     match = re.match(r"(\d+)\.(\d+)\.(\d+)", current)
     if not match:
-        print(f"ℹ️  Selected version: {target}")
+        print(f"ℹ️  Selected version: {target}", file=sys.stderr)
         return
     major, minor, patch = map(int, match.groups())
 
-    print("\n🚀 VERSION SUGGESTIONS 🚀")
-    print("==========================")
-    print(f"📦 Patch: {major}.{minor}.{patch + 1}")
-    print(f"✨ Minor: {major}.{minor + 1}.0")
-    print(f"🔥 Major: {major + 1}.0.0")
-    print("")
-    print(f"ℹ️  Selected version: {target}")
+    print("\n🚀 VERSION SUGGESTIONS 🚀", file=sys.stderr)
+    print("==========================", file=sys.stderr)
+    print(f"📦 Patch: {major}.{minor}.{patch + 1}", file=sys.stderr)
+    print(f"✨ Minor: {major}.{minor + 1}.0", file=sys.stderr)
+    print(f"🔥 Major: {major + 1}.0.0", file=sys.stderr)
+    print("", file=sys.stderr)
+    print(f"ℹ️  Selected version: {target}", file=sys.stderr)
 
 
 def main():
@@ -161,7 +161,7 @@ def main():
 
     # Get current version
     current_version = get_current_version(repo)
-    print(f"Current version: {current_version}")
+    print(f"Current version: {current_version}", file=sys.stderr)
 
     # Update bumpversion config
     update_bumpversion_config(current_version)
@@ -169,7 +169,7 @@ def main():
     try:
         # Get target version
         target_version = get_target_version(version_bump, custom_version, version_type)
-        print(f"Target version: {target_version}")
+        print(f"Target version: {target_version}", file=sys.stderr)
 
         # Validate version
         validate_version(current_version, target_version)
