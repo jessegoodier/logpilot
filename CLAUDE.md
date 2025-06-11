@@ -244,6 +244,7 @@ bump-my-version bump --allow-dirty patch
 # - Version Type: "dev" creates development versions (0.3.6-dev)  
 # - Version Type: "release" creates production versions (0.3.6)
 # Both options work with all bump types (patch/minor/major/custom)
+# The workflow automatically updates all version files and commits to main branch
 
 # Legacy scripts (still available)
 ./scripts/check-versions.sh              # Check all version references
