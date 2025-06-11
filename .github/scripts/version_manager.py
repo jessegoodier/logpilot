@@ -64,7 +64,7 @@ def get_target_version(version_bump: str, custom_version: Optional[str] = None, 
         show_result = subprocess.run(["bump-my-version", "show"], capture_output=True, text=True)
         for line in show_result.stdout.split("\n"):
             if "'current_version':" in line:
-                # Extract version from "'current_version': '0.3.5-dev'," format
+                # Extract version from "'current_version': '0.3.7'," format
                 match = re.search(r"'current_version':\s*'([^']+)'", line)
                 if match:
                     current_ver = match.group(1)
@@ -78,7 +78,7 @@ def get_target_version(version_bump: str, custom_version: Optional[str] = None, 
         show_result = subprocess.run(["bump-my-version", "show"], capture_output=True, text=True)
         for line in show_result.stdout.split("\n"):
             if "'current_version':" in line:
-                # Extract version from "'current_version': '0.3.5-dev'," format
+                # Extract version from "'current_version': '0.3.7'," format
                 match = re.search(r"'current_version':\s*'([^']+)'", line)
                 if match:
                     current_ver = match.group(1)
