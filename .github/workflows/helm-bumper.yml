@@ -2,6 +2,14 @@ name: Helm Chart Bumper
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to release from"
+        required: true
+        type: choice
+        options:
+          - main
+        default: "main"
 
 jobs:
   helm-release:
@@ -12,6 +20,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch }}
 
     - name: Set up Python
       uses: actions/setup-python@v4
