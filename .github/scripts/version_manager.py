@@ -177,9 +177,10 @@ def main():
         # Show version suggestions
         show_version_suggestions(current_version, target_version)
 
-        # Output versions for GitHub Actions
-        print(f"::set-output name=version::{target_version}")
-        print(f"::set-output name=current-version::{current_version}")
+        # Output versions for GitHub Actions using environment files
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write(f"version={target_version}\n")
+            f.write(f"current-version={current_version}\n")
 
     except Exception as e:
         print(f"❌ Error: {str(e)}", file=sys.stderr)
