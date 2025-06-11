@@ -69,7 +69,7 @@ jobs:
       run: |
         BRANCH_NAME="v${{ steps.version.outputs.version }}"
         git checkout -b $BRANCH_NAME
-        echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+        echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
     - name: Update version in all files
       run: |
@@ -96,6 +96,9 @@ jobs:
         if git diff --staged --quiet; then
           echo "No version changes to commit"
         else
+          # Pull latest changes before committing
+          git pull origin main --rebase
+          
           # Commit the version changes
           git commit -m "Bump version to ${{ steps.version.outputs.version }}" \
                      -m "Version bump: ${{ github.event.inputs.version_bump }}" \
@@ -103,8 +106,8 @@ jobs:
                      -m "Previous version: ${{ steps.version.outputs.current-version }}" \
                      -m ""
           
-          # Push to version branch
-          git push origin ${{ steps.create-branch.outputs.branch_name }}
+          # Push to version branch with force to handle any conflicts
+          git push -f origin ${{ steps.create-branch.outputs.branch_name }}
           echo "✅ Version changes committed to version branch"
         fi
 
