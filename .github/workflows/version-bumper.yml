@@ -54,7 +54,7 @@ jobs:
         run: |
 
           echo "Updating version with bump-my-version from current to ${{ steps.new-version.outputs.new_version }}"
-          bump-my-version bump --allow-dirty --new-version "${{ steps.new-version.outputs.new_version }}" patch
+          uv run bump-my-version bump --allow-dirty --new-version "${{ steps.new-version.outputs.new_version }}" patch
 
           # Verify the version was updated correctly
           echo "=== Files updated ==="
