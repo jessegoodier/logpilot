@@ -2,9 +2,8 @@ name: Helm Tester
 
 on:
   pull_request:
-    branches:
-      - main
-
+    paths:
+      - 'charts/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

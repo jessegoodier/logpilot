@@ -2,29 +2,6 @@ name: Helm Chart Bumper
 
 on:
   workflow_dispatch:
-    inputs:
-      version_bump:
-        description: "Version bump type"
-        required: true
-        default: "patch"
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-          - custom
-      custom_version:
-        description: "Custom version (only used if version_bump=custom, e.g. 0.3.2)"
-        required: false
-        default: ""
-      version_type:
-        description: "Version type: 'release' for production (0.3.5) or 'dev' for development (0.3.5-dev)"
-        required: true
-        default: "dev"
-        type: choice
-        options:
-          - dev
-          - release
 
 jobs:
   helm-release:
@@ -45,23 +22,13 @@ jobs:
       run: |
         python -m pip install uv --break-system-packages
 
-    - name: Configure Git
-      run: |
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
-
-    - name: Get current and target version
+    - name: Get version from Python package
       id: version
       run: |
         uv venv
         source .venv/bin/activate
-        uv pip install -r .github/scripts/requirements.txt
-        python .github/scripts/version_manager.py
-      env:
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        INPUT_VERSION_BUMP: ${{ github.event.inputs.version_bump }}
-        INPUT_CUSTOM_VERSION: ${{ github.event.inputs.custom_version }}
-        INPUT_VERSION_TYPE: ${{ github.event.inputs.version_type }}
+        uv pip install -e .
+        echo "version=$(python -c "import logpilot; print(logpilot.__version__)")" >> $GITHUB_OUTPUT
 
     - name: Setup Helm
       uses: azure/setup-helm@v3
@@ -75,46 +42,11 @@ jobs:
     - name: Create dist directory
       run: mkdir -p dist
 
-    - name: Update version in all files
+    - name: Update Helm chart version
       run: |
-        source .venv/bin/activate
-        echo "Updating version from current to ${{ steps.version.outputs.version }}"
-        
-        # Use bump-my-version to update all configured files
-        # Since version_manager.py already calculated the exact target version,
-        # we can use --new-version to set it directly
-        bump-my-version bump --allow-dirty --new-version "${{ steps.version.outputs.version }}" patch
-        
-        # Verify the version was updated correctly
-        echo "=== Files updated ==="
-        git diff --name-only
-        echo "=== Version in key files ==="
-        grep -r "${{ steps.version.outputs.version }}" pyproject.toml src/__init__.py src/main.py || echo "Version check failed"
-
-    - name: Commit version changes to main branch
-      run: |
-        # Add all the version-updated files
-        git add pyproject.toml src/__init__.py src/main.py charts/logpilot/Chart.yaml charts/logpilot/pyproject.toml charts/logpilot/src/__init__.py k8s/deployment.yaml
-        
-        # Check if there are changes to commit
-        if git diff --staged --quiet; then
-          echo "No version changes to commit"
-        else
-          # Commit the version changes
-          git commit -m "Bump version to ${{ steps.version.outputs.version }}" \
-                     -m "Version bump: ${{ github.event.inputs.version_bump }}" \
-                     -m "Version type: ${{ github.event.inputs.version_type }}" \
-                     -m "Previous version: ${{ steps.version.outputs.current-version }}" \
-                     -m "" \
-                     -m "🤖 Generated with [Claude Code](https://claude.ai/code)" \
-                     -m "" \
-                     -m "Co-Authored-By: Claude <noreply@anthropic.com>"
-          
-          # Push to main branch
-          git push origin main
-          echo "✅ Version changes committed to main branch"
-        fi
-
+        # Update version in Chart.yaml
+        sed -i "s/^version: .*/version: ${{ steps.version.outputs.version }}/" charts/logpilot/Chart.yaml
+        sed -i "s/^appVersion: .*/appVersion: ${{ steps.version.outputs.version }}/" charts/logpilot/Chart.yaml
     - name: Sync source files to chart
       run: |
         # Ensure chart src directory exists
@@ -160,9 +92,17 @@ jobs:
         echo "Packaged charts:"
         ls -la dist/
 
+    - name: Fetch existing index
+      run: |
+        # Create a temporary directory for the existing index
+        mkdir -p /tmp/helm-index
+        # Try to fetch the existing index from gh-pages
+        curl -s -o /tmp/helm-index/index.yaml "https://${{ github.repository_owner }}.github.io/$(echo ${{ github.repository }} | cut -d'/' -f2)/index.yaml" || touch /tmp/helm-index/index.yaml
+
     - name: Generate Helm repository index
       run: |
-        helm repo index dist/ --url https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/
+        # Generate new index and merge with existing one
+        helm repo index dist/ --url https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/ --merge /tmp/helm-index/index.yaml
         echo "Generated index.yaml:"
         cat dist/index.yaml
 
@@ -176,11 +116,11 @@ jobs:
         body: |
           ## Release v${{ steps.version.outputs.version }}
           
-          **Version Bump:** ${{ github.event.inputs.version_bump }}
-          **Previous Version:** ${{ steps.version.outputs.current-version }}
-          **New Version:** ${{ steps.version.outputs.version }}
+          This release was created automatically after version bump PR was merged.
           
-          This release was created using bump-my-version for automated version management.
+          ### Changes
+          - Updated Helm chart version to match Python package version
+          - Published new Helm chart release
 
     - name: Deploy to gh-pages
       run: |
