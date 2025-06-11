@@ -30,7 +30,7 @@ jobs:
           uv venv
           source .venv/bin/activate
           uv pip install -r .github/scripts/requirements.txt
-          
+
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Actions"
@@ -61,10 +61,7 @@ jobs:
           git diff --name-only
           echo "=== Version in key files ==="
           grep -r "${{ steps.new-version.outputs.new_version }}" pyproject.toml src/__init__.py src/main.py || echo "Version check failed"
-      - name: Update Helm Bumper workflow with version branches
-        run: |
-          # adding the version branches to options in the helm-bumper.yml file
-          uv run python .github/scripts/update_helm_bumper.py
+
       - name: Commit version changes
         run: |
           # Add all the version-updated files
@@ -95,6 +92,11 @@ jobs:
             git push -f origin ${{ steps.create-branch.outputs.branch_name }}
             echo "✅ Version changes committed to version branch"
           fi
+
+      - name: Update Helm Bumper workflow with version branches
+        run: |
+          # adding the version branches to options in the helm-bumper.yml file
+          uv run python .github/scripts/update_helm_bumper.py
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
