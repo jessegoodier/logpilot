@@ -76,12 +76,6 @@ search = "version: {current_version}"
 replace = "version: {new_version}"
 
 [[tool.bumpversion.files]]
-filename = "charts/logpilot/pyproject.toml"
-
-[[tool.bumpversion.files]]
-filename = "charts/logpilot/src/__init__.py"
-
-[[tool.bumpversion.files]]
 filename = "k8s/deployment.yaml"
 search = "value: \"{current_version}\" # APP_VERSION"
 replace = "value: \"{new_version}\" # APP_VERSION"
