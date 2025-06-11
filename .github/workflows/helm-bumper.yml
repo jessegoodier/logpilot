@@ -40,7 +40,7 @@ jobs:
         uv pip install -e '.[dev]'
         # Ensure we're in the right directory
         cd "$GITHUB_WORKSPACE"
-        echo "version=$(python -c "import logpilot; print(logpilot.__version__)")" >> $GITHUB_OUTPUT
+        echo "version=$(python -c "import src; print(src.__version__)")" >> $GITHUB_OUTPUT
 
     - name: Setup Helm
       uses: azure/setup-helm@v3
