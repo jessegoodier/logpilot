@@ -17,7 +17,8 @@ def update_workflow_file():
 
     # Get version branches
     version_branches = get_version_branches()
-    
+    # add main to the list of version branches
+    version_branches.append('main')
     # Navigate to the options and default fields
     try:
         branch_input = workflow['on']['workflow_dispatch']['inputs']['branch']
