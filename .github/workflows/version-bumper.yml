@@ -1,0 +1,141 @@
+name: Version Bumper
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: "Version bump type"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - custom
+      custom_version:
+        description: "Custom version (only used if version_bump=custom, e.g. 0.3.2)"
+        required: false
+        default: ""
+      version_type:
+        description: "Version type: 'release' for production (0.3.5) or 'dev' for development (0.3.5-dev)"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - release
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install uv
+      run: |
+        python -m pip install uv --break-system-packages
+
+    - name: Configure Git
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+
+    - name: Get current and target version
+      id: version
+      run: |
+        uv venv
+        source .venv/bin/activate
+        uv pip install -r .github/scripts/requirements.txt
+        python .github/scripts/version_manager.py
+      env:
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        INPUT_VERSION_BUMP: ${{ github.event.inputs.version_bump }}
+        INPUT_CUSTOM_VERSION: ${{ github.event.inputs.custom_version }}
+        INPUT_VERSION_TYPE: ${{ github.event.inputs.version_type }}
+
+    - name: Create version branch
+      id: create-branch
+      run: |
+        BRANCH_NAME="version-bump-${{ steps.version.outputs.version }}"
+        git checkout -b $BRANCH_NAME
+        echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+    - name: Update version in all files
+      run: |
+        source .venv/bin/activate
+        echo "Updating version from current to ${{ steps.version.outputs.version }}"
+        
+        # Use bump-my-version to update all configured files
+        # Since version_manager.py already calculated the exact target version,
+        # we can use --new-version to set it directly
+        bump-my-version bump --allow-dirty --new-version "${{ steps.version.outputs.version }}" patch
+        
+        # Verify the version was updated correctly
+        echo "=== Files updated ==="
+        git diff --name-only
+        echo "=== Version in key files ==="
+        grep -r "${{ steps.version.outputs.version }}" pyproject.toml src/__init__.py src/main.py || echo "Version check failed"
+
+    - name: Commit version changes
+      run: |
+        # Add all the version-updated files
+        git add pyproject.toml src/__init__.py src/main.py
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "No version changes to commit"
+        else
+          # Commit the version changes
+          git commit -m "Bump version to ${{ steps.version.outputs.version }}" \
+                     -m "Version bump: ${{ github.event.inputs.version_bump }}" \
+                     -m "Version type: ${{ github.event.inputs.version_type }}" \
+                     -m "Previous version: ${{ steps.version.outputs.current-version }}" \
+                     -m "" \
+                     -m "🤖 Generated with [Claude Code](https://claude.ai/code)" \
+                     -m "" \
+                     -m "Co-Authored-By: Claude <noreply@anthropic.com>"
+          
+          # Push to version branch
+          git push origin ${{ steps.create-branch.outputs.branch_name }}
+          echo "✅ Version changes committed to version branch"
+        fi
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "Bump version to ${{ steps.version.outputs.version }}"
+        title: "Version Bump: ${{ steps.version.outputs.version }}"
+        body: |
+          ## Version Bump PR
+          
+          **Version Bump Type:** ${{ github.event.inputs.version_bump }}
+          **Previous Version:** ${{ steps.version.outputs.current-version }}
+          **New Version:** ${{ steps.version.outputs.version }}
+          **Version Type:** ${{ github.event.inputs.version_type }}
+          
+          This PR was automatically created by the Version Bumper workflow.
+          
+          ### Changes
+          - Updated version in all relevant files
+          - Updated Python package version
+          
+          Please review the changes and merge if everything looks correct.
+          
+          After merging, the Helm Chart Bumper workflow will automatically run to update the Helm chart version.
+        branch: ${{ steps.create-branch.outputs.branch_name }}
+        base: main
+        labels: |
+          version-bump
+          automated-pr 
