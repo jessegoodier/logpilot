@@ -63,12 +63,18 @@ values = ["dev", "release"]
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
 
 [[tool.bumpversion.files]]
 filename = "src/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
 
 [[tool.bumpversion.files]]
 filename = "src/main.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
 
 [[tool.bumpversion.files]]
 filename = "k8s/deployment.yaml"
