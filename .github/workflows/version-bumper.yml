@@ -64,7 +64,7 @@ jobs:
       - name: Update Helm Bumper workflow with version branches
         run: |
           # adding the version branches to options in the helm-bumper.yml file
-          python .github/scripts/update_helm_bumper.py
+          uv run python .github/scripts/update_helm_bumper.py
       - name: Commit version changes
         run: |
           # Add all the version-updated files
