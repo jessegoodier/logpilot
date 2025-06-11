@@ -28,8 +28,9 @@ jobs:
         run: |
           python -m pip install uv --break-system-packages
           uv venv
-          uv pip install -r .github/scripts/requirements.txt
           source .venv/bin/activate
+          uv pip install -r .github/scripts/requirements.txt
+          
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Actions"
@@ -51,9 +52,8 @@ jobs:
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
       - name: Update version in all files
         run: |
-          source .venv/bin/activate
-          echo "Updating version with bump-my-version from current to ${{ steps.new-version.outputs.new_version }}"
 
+          echo "Updating version with bump-my-version from current to ${{ steps.new-version.outputs.new_version }}"
           bump-my-version bump --allow-dirty --new-version "${{ steps.new-version.outputs.new_version }}" patch
 
           # Verify the version was updated correctly
