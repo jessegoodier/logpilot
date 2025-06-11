@@ -67,7 +67,7 @@ jobs:
     - name: Create version branch
       id: create-branch
       run: |
-        BRANCH_NAME="version-bump-${{ steps.version.outputs.version }}"
+        BRANCH_NAME="v${{ steps.version.outputs.version }}"
         git checkout -b $BRANCH_NAME
         echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
@@ -101,10 +101,7 @@ jobs:
                      -m "Version bump: ${{ github.event.inputs.version_bump }}" \
                      -m "Version type: ${{ github.event.inputs.version_type }}" \
                      -m "Previous version: ${{ steps.version.outputs.current-version }}" \
-                     -m "" \
-                     -m "🤖 Generated with [Claude Code](https://claude.ai/code)" \
-                     -m "" \
-                     -m "Co-Authored-By: Claude <noreply@anthropic.com>"
+                     -m ""
           
           # Push to version branch
           git push origin ${{ steps.create-branch.outputs.branch_name }}

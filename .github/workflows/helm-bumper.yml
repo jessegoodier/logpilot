@@ -46,13 +46,7 @@ jobs:
       run: |
         # Update version in Chart.yaml
         sed -i "s/^version: .*/version: ${{ steps.version.outputs.version }}/" charts/logpilot/Chart.yaml
-        
-        # Update version in chart's pyproject.toml
-        sed -i "s/^version = .*/version = \"${{ steps.version.outputs.version }}\"/" charts/logpilot/pyproject.toml
-        
-        # Update version in chart's __init__.py
-        sed -i "s/^__version__ = .*/__version__ = \"${{ steps.version.outputs.version }}\"/" charts/logpilot/src/__init__.py
-
+        sed -i "s/^appVersion: .*/appVersion: ${{ steps.version.outputs.version }}/" charts/logpilot/Chart.yaml
     - name: Sync source files to chart
       run: |
         # Ensure chart src directory exists
