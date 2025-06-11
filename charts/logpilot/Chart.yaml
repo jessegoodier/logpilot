@@ -2,8 +2,8 @@ apiVersion: v2
 name: logpilot
 description: A Helm chart for logPilot
 type: application
-version: 0.3.8
-appVersion: "0.3.8"
+version: 0.3.9
+appVersion: "0.3.9"
 keywords:
   - kubernetes
   - logs
