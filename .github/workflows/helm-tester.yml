@@ -1,14 +1,11 @@
 name: Helm Tester
-
 on:
   pull_request:
     paths:
       - 'charts/**'
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   helm-test:
     runs-on: ubuntu-latest
@@ -16,16 +13,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Helm
         uses: azure/setup-helm@v3
         with:
           version: '3.12.0'
-
       - name: Install helm-unittest plugin
         run: |
           helm plugin install https://github.com/helm-unittest/helm-unittest --version v0.6.2
-
       - name: Sync source files to chart
         run: |
           # Ensure chart src directory exists
@@ -39,20 +33,17 @@ jobs:
           echo "Files in chart directory:"
           ls -la charts/logpilot/
           ls -la charts/logpilot/src/
-
       - name: Run Helm unit tests
         run: |
           helm unittest charts/logpilot
-
       - name: Lint Helm chart
         run: |
           helm lint charts/logpilot
-
       - name: Template and validate chart
         run: |
           # Test with default values
           helm template test-release charts/logpilot > /tmp/default-output.yaml
-          
+
           # Test with custom values
           cat > /tmp/test-values.yaml << EOF
           auth:
@@ -72,12 +63,11 @@ jobs:
                   - path: /
                     pathType: Prefix
           EOF
-          
+
           helm template test-release charts/logpilot -f /tmp/test-values.yaml > /tmp/custom-output.yaml
-          
+
           echo "Default values template generated successfully"
           echo "Custom values template generated successfully"
-
       - name: Upload test results
         if: failure()
         uses: actions/upload-artifact@v4
