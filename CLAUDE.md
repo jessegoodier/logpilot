@@ -240,6 +240,11 @@ bump-my-version bump --dry-run release    # 0.3.5-dev → 0.3.5
 # Actually bump version (updates all configured files)
 bump-my-version bump --allow-dirty patch
 
+# Control version type via GitHub Actions workflow
+# - Version Type: "dev" creates development versions (0.3.6-dev)  
+# - Version Type: "release" creates production versions (0.3.6)
+# Both options work with all bump types (patch/minor/major/custom)
+
 # Legacy scripts (still available)
 ./scripts/check-versions.sh              # Check all version references
 ./scripts/update-versions.sh <version>   # Update to specific version

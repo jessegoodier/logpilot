@@ -17,6 +17,14 @@ on:
         description: "Custom version (only used if version_bump=custom, e.g. 0.3.2)"
         required: false
         default: ""
+      version_type:
+        description: "Version type: 'release' for production (0.3.5) or 'dev' for development (0.3.5-dev)"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - release
 
 jobs:
   helm-release:
@@ -53,6 +61,7 @@ jobs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         INPUT_VERSION_BUMP: ${{ github.event.inputs.version_bump }}
         INPUT_CUSTOM_VERSION: ${{ github.event.inputs.custom_version }}
+        INPUT_VERSION_TYPE: ${{ github.event.inputs.version_type }}
 
     - name: Setup Helm
       uses: azure/setup-helm@v3
