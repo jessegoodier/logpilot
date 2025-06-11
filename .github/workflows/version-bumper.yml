@@ -96,8 +96,17 @@ jobs:
         if git diff --staged --quiet; then
           echo "No version changes to commit"
         else
-          # Pull latest changes before committing
-          git pull origin main --rebase
+          # Stash any unstaged changes
+          git stash
+          
+          # Pull latest changes
+          git pull origin main
+          
+          # Pop stashed changes
+          git stash pop || true
+          
+          # Add files again after pop
+          git add pyproject.toml src/__init__.py src/main.py
           
           # Commit the version changes
           git commit -m "Bump version to ${{ steps.version.outputs.version }}" \
