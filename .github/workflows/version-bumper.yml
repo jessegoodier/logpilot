@@ -57,7 +57,9 @@ jobs:
         uv venv
         source .venv/bin/activate
         uv pip install -r .github/scripts/requirements.txt
-        python .github/scripts/version_manager.py
+        VERSION=$(python .github/scripts/version_manager.py)
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "Current version: $VERSION"
       env:
         GITHUB_REPOSITORY: ${{ github.repository }}
         INPUT_VERSION_BUMP: ${{ github.event.inputs.version_bump }}
@@ -86,6 +88,20 @@ jobs:
         git diff --name-only
         echo "=== Version in key files ==="
         grep -r "${{ steps.version.outputs.version }}" pyproject.toml src/__init__.py src/main.py || echo "Version check failed"
+
+    - name: Update Helm Bumper workflow with version branches
+      run: |
+        # Get all version branches and sort by creation date
+        VERSION_BRANCHES=$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/remotes/origin/v* | sed 's/origin\///')
+        
+        # Create the branch list for the workflow
+        BRANCH_LIST=$(echo "$VERSION_BRANCHES" | sed 's/^/          - /' | sed '1s/^/        options:\n/')
+        
+        # Update the helm-bumper.yml file
+        sed -i.bak "/branch:/,/default:/c\      branch:\n        description: \"Branch to release from\"\n        required: true\n$BRANCH_LIST\n        default: \"$(echo "$VERSION_BRANCHES" | head -n1)\"" .github/workflows/helm-bumper.yml
+        
+        # Add the updated workflow file
+        git add .github/workflows/helm-bumper.yml
 
     - name: Commit version changes
       run: |
@@ -139,6 +155,7 @@ jobs:
           ### Changes
           - Updated version in all relevant files
           - Updated Python package version
+          - Updated Helm Bumper workflow with available version branches
           
           Please review the changes and merge if everything looks correct.
           
