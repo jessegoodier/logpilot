@@ -1,5 +1,5 @@
 requests
 packaging
-bump2version
+bump-my-version
 ruff
 isort

@@ -131,7 +131,7 @@ jobs:
           **Previous Version:** ${{ steps.version.outputs.current-version }}
           **New Version:** ${{ steps.version.outputs.version }}
           
-          This release was created using bump2version for automated version management.
+          This release was created using bump-my-version for automated version management.
 
     - name: Deploy to gh-pages
       run: |

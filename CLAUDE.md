@@ -218,18 +218,43 @@ python src/main.py
 ```
 
 ### Version Management
+
+This project uses `bump-my-version` (successor to bump2version) for automated version management. Configuration is in `pyproject.toml` under `[tool.bumpversion]`.
+
 ```bash
-# Check all version references across the project
-./scripts/check-versions.sh
+# Install bump-my-version
+uv pip install bump-my-version
 
-# Update all version references (for releases)
-./scripts/update-versions.sh <new-version>
+# Show current version and configuration
+bump-my-version show
 
-# Example: Update to version 0.3.0
-./scripts/update-versions.sh 0.3.0
+# Preview what a version bump would do
+bump-my-version show-bump <current-version>
+
+# Bump version parts (dry run)
+bump-my-version bump --dry-run patch      # 0.3.5-dev → 0.3.6-dev
+bump-my-version bump --dry-run minor      # 0.3.5-dev → 0.4.0-dev  
+bump-my-version bump --dry-run major      # 0.3.5-dev → 1.0.0-dev
+bump-my-version bump --dry-run release    # 0.3.5-dev → 0.3.5
+
+# Actually bump version (updates all configured files)
+bump-my-version bump --allow-dirty patch
+
+# Legacy scripts (still available)
+./scripts/check-versions.sh              # Check all version references
+./scripts/update-versions.sh <version>   # Update to specific version
 ```
 
-Note: The main branch uses placeholder version `0.0.0-dev`. The release workflow automatically updates all version references during the release process.
+**Files automatically updated by bump-my-version:**
+- `pyproject.toml` - Project version
+- `src/__init__.py` - Python package version  
+- `src/main.py` - Application version
+- `charts/logpilot/Chart.yaml` - Helm chart version
+- `charts/logpilot/pyproject.toml` - Chart package version
+- `charts/logpilot/src/__init__.py` - Chart source version
+- `k8s/deployment.yaml` - Container environment version
+
+Note: The main branch uses placeholder version `0.0.0-dev`. The release workflow automatically updates all version references during the release process using the GitHub Actions version_manager.py script.
 
 ## GitHub Actions Debugging
 
