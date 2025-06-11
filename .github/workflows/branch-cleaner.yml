@@ -1,10 +1,8 @@
 name: Delete Merged Branch (Non-Release)
-
 on:
   pull_request:
     types:
       - closed
-
 jobs:
   delete-branch:
     if: github.event.pull_request.merged == true
@@ -19,7 +17,6 @@ jobs:
           else
             echo "is_version=false" >> $GITHUB_OUTPUT
           fi
-      
       - name: Delete non-release branch
         if: |
           !startsWith(github.event.pull_request.head.ref, 'release/') &&

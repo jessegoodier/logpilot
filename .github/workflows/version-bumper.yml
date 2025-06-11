@@ -1,5 +1,4 @@
 name: Version Bumper
-
 on:
   workflow_dispatch:
     inputs:
@@ -25,14 +24,12 @@ on:
         options:
           - dev
           - release
-
 jobs:
   version-bump:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
