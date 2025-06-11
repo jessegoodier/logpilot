@@ -71,16 +71,6 @@ filename = "src/__init__.py"
 filename = "src/main.py"
 
 [[tool.bumpversion.files]]
-filename = "charts/logpilot/Chart.yaml"
-search = "version: {current_version}"
-replace = "version: {new_version}"
-
-[[tool.bumpversion.files]]
-filename = "charts/logpilot/Chart.yaml"
-search = "appVersion: \"{current_version}\""
-replace = "appVersion: \"{new_version}\""
-
-[[tool.bumpversion.files]]
 filename = "k8s/deployment.yaml"
 search = "value: \"{current_version}\" # APP_VERSION"
 replace = "value: \"{new_version}\" # APP_VERSION"

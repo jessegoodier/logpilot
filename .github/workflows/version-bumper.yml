@@ -57,7 +57,9 @@ jobs:
         uv venv
         source .venv/bin/activate
         uv pip install -r .github/scripts/requirements.txt
-        python .github/scripts/version_manager.py
+        VERSION=$(python .github/scripts/version_manager.py)
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "Current version: $VERSION"
       env:
         GITHUB_REPOSITORY: ${{ github.repository }}
         INPUT_VERSION_BUMP: ${{ github.event.inputs.version_bump }}

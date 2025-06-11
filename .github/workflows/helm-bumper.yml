@@ -27,7 +27,9 @@ jobs:
       run: |
         uv venv
         source .venv/bin/activate
-        uv pip install -e .
+        uv pip install -e '.[dev]'
+        # Ensure we're in the right directory
+        cd "$GITHUB_WORKSPACE"
         echo "version=$(python -c "import logpilot; print(logpilot.__version__)")" >> $GITHUB_OUTPUT
 
     - name: Setup Helm
