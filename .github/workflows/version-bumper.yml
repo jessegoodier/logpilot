@@ -11,12 +11,6 @@ on:
           - patch
           - minor
           - major
-          - custom
-      custom_version:
-        description: "Custom version (only used if version_bump=custom, e.g. 0.3.2)"
-        required: false
-        default: ""
-
 jobs:
   version-bump:
     runs-on: ubuntu-latest
@@ -43,13 +37,12 @@ jobs:
       - name: Get new version
         id: new-version
         run: |
-          new_version=$(uv run bump-my-version show --increment ${{ github.event.inputs.version_bump }}) new_version)
+          new_version=$(uv run bump-my-version show --increment ${{ github.event.inputs.version_bump }} new_version)
           echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
           echo "new_version=$new_version"
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
           INPUT_VERSION_BUMP: ${{ github.event.inputs.version_bump }}
-
       - name: Create version branch
         id: create-branch
         run: |
@@ -67,13 +60,11 @@ jobs:
           echo "=== Files updated ==="
           git diff --name-only
           echo "=== Version in key files ==="
-          grep -r "${{ steps.version.outputs.version }}" pyproject.toml src/__init__.py src/main.py || echo "Version check failed"
+          grep -r "${{ steps.new-version.outputs.new_version }}" pyproject.toml src/__init__.py src/main.py || echo "Version check failed"
       - name: Update Helm Bumper workflow with version branches
         run: |
           # adding the version branches to options in the helm-bumper.yml file
           python .github/scripts/update_helm_bumper.py
-
-
       - name: Commit version changes
         run: |
           # Add all the version-updated files
