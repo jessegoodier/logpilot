@@ -75,6 +75,46 @@ jobs:
     - name: Create dist directory
       run: mkdir -p dist
 
+    - name: Update version in all files
+      run: |
+        source .venv/bin/activate
+        echo "Updating version from current to ${{ steps.version.outputs.version }}"
+        
+        # Use bump-my-version to update all configured files
+        # Since version_manager.py already calculated the exact target version,
+        # we can use --new-version to set it directly
+        bump-my-version bump --allow-dirty --new-version "${{ steps.version.outputs.version }}" patch
+        
+        # Verify the version was updated correctly
+        echo "=== Files updated ==="
+        git diff --name-only
+        echo "=== Version in key files ==="
+        grep -r "${{ steps.version.outputs.version }}" pyproject.toml src/__init__.py src/main.py || echo "Version check failed"
+
+    - name: Commit version changes to main branch
+      run: |
+        # Add all the version-updated files
+        git add pyproject.toml src/__init__.py src/main.py charts/logpilot/Chart.yaml charts/logpilot/pyproject.toml charts/logpilot/src/__init__.py k8s/deployment.yaml
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "No version changes to commit"
+        else
+          # Commit the version changes
+          git commit -m "Bump version to ${{ steps.version.outputs.version }}" \
+                     -m "Version bump: ${{ github.event.inputs.version_bump }}" \
+                     -m "Version type: ${{ github.event.inputs.version_type }}" \
+                     -m "Previous version: ${{ steps.version.outputs.current-version }}" \
+                     -m "" \
+                     -m "🤖 Generated with [Claude Code](https://claude.ai/code)" \
+                     -m "" \
+                     -m "Co-Authored-By: Claude <noreply@anthropic.com>"
+          
+          # Push to main branch
+          git push origin main
+          echo "✅ Version changes committed to main branch"
+        fi
+
     - name: Sync source files to chart
       run: |
         # Ensure chart src directory exists
