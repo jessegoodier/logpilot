@@ -20,7 +20,8 @@ dev = [
     "isort",
     "packaging",
     "bump-my-version",
-  ]
+    "ruamel-yaml"
+]
 
 [build-system]
 requires = ["hatchling"]

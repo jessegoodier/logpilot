@@ -91,14 +91,7 @@ jobs:
 
     - name: Update Helm Bumper workflow with version branches
       run: |
-        # Get all version branches and sort by creation date
-        VERSION_BRANCHES=$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/remotes/origin/v* | sed 's/origin\///')
-        
-        # Create the branch list for the workflow
-        BRANCH_LIST=$(echo "$VERSION_BRANCHES" | sed 's/^/          - /' | sed '1s/^/        options:\n/')
-        
-        # Update the helm-bumper.yml file
-        sed -i.bak "/branch:/,/default:/c\      branch:\n        description: \"Branch to release from\"\n        required: true\n$BRANCH_LIST\n        default: \"$(echo "$VERSION_BRANCHES" | head -n1)\"" .github/workflows/helm-bumper.yml
+        python .github/scripts/update_helm_bumper.py
         
         # Add the updated workflow file
         git add .github/workflows/helm-bumper.yml

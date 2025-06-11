@@ -3,3 +3,4 @@ packaging
 bump-my-version
 ruff
 isort
+ruamel-yaml
