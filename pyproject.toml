@@ -42,10 +42,10 @@ known_first_party = ["tests", "scripts", "hooks"]
 # ==== bump-my-version ====
 
 [tool.bumpversion]
-
+current_version = "0.4.0"
 commit = false
 tag = false
-message = "Bump version: {current_version} → {new_version}"
+allow_dirty = true
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
@@ -89,5 +89,5 @@ replace = "version = \"{new_version}\""
 
 [[tool.bumpversion.files]]
 filename = ".github/workflows/helm-publisher.yml"
-search = "        default: v{current_version}"
-replace = "        default: v{new_version}"
+search = "          - v{current_version}"
+replace = "          - v{new_version}"

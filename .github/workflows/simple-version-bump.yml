@@ -1,0 +1,135 @@
+name: Simple Version Bump
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: "Version bump type"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install uv --break-system-packages
+          uv venv
+          source .venv/bin/activate
+          uv pip install -e '.[dev]'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+
+      - name: Get current version
+        id: current_version
+        run: |
+          source .venv/bin/activate
+          current=$(bump-my-version show current_version)
+          echo "current=$current" >> $GITHUB_OUTPUT
+          echo "Current version: $current"
+
+      - name: Create version bump branch
+        id: branch
+        run: |
+          source .venv/bin/activate
+          new_version=$(bump-my-version show --increment ${{ inputs.version_type }} new_version)
+          branch_name="version-bump-$new_version"
+          git checkout -b $branch_name
+          echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+          echo "Created branch: $branch_name for version: $new_version"
+
+      - name: Copy Python files to Helm chart
+        run: |
+          echo "Copying Python source files to Helm chart..."
+          cp -r src/* charts/logpilot/src/
+          cp pyproject.toml charts/logpilot/
+          echo "Files copied successfully"
+
+      - name: Bump version in all files
+        run: |
+          source .venv/bin/activate
+          echo "Bumping version with type: ${{ inputs.version_type }}"
+          bump-my-version bump ${{ inputs.version_type }} --allow-dirty
+          echo "Version bump completed"
+
+      - name: Commit changes
+        run: |
+          git add .
+          git commit -m "Bump version to ${{ steps.branch.outputs.new_version }}
+
+          - Updated all version references
+          - Copied Python source files to Helm chart
+          - Ready for release
+
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+
+      - name: Push branch
+        run: |
+          git push origin ${{ steps.branch.outputs.branch_name }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          branch: ${{ steps.branch.outputs.branch_name }}
+          title: "🚀 Version Bump: ${{ steps.current_version.outputs.current }} → ${{ steps.branch.outputs.new_version }}"
+          body: |
+            ## 🚀 Version Bump: ${{ inputs.version_type }}
+            
+            **Previous Version:** `${{ steps.current_version.outputs.current }}`  
+            **New Version:** `${{ steps.branch.outputs.new_version }}`
+            
+            ### 📋 Changes Made
+            - ✅ Updated version in all Python files
+            - ✅ Updated version in Helm chart files  
+            - ✅ Updated version in Kubernetes manifests
+            - ✅ Updated version in workflow files
+            - ✅ Copied latest Python source files to Helm chart
+            
+            ### 🔍 Files Updated
+            - `pyproject.toml`
+            - `src/__init__.py` 
+            - `src/main.py`
+            - `k8s/deployment.yaml`
+            - `charts/logpilot/Chart.yaml`
+            - `charts/logpilot/src/__init__.py`
+            - `charts/logpilot/pyproject.toml`
+            - `.github/workflows/helm-publisher.yml`
+            
+            ### 🎯 Next Steps
+            1. Review the changes in this PR
+            2. Merge this PR to complete the version bump
+            3. The Helm Chart Publisher workflow will automatically trigger
+            
+            ---
+            🤖 *This PR was automatically created by the Simple Version Bump workflow*
+          labels: |
+            version-bump
+            automated-pr
+            ${{ inputs.version_type }}
