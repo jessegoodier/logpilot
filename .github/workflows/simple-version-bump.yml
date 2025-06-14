@@ -56,7 +56,7 @@ jobs:
         run: |
           source .venv/bin/activate
           new_version=$(bump-my-version show --increment ${{ inputs.version_type }} new_version)
-          branch_name="version-bump-$new_version"
+          branch_name="$new_version"
           git checkout -b $branch_name
           echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
@@ -103,32 +103,32 @@ jobs:
             --title "🚀 Version Bump: ${{ steps.current_version.outputs.current }} → ${{ steps.branch.outputs.new_version }}" \
             --body "$(cat <<'EOF'
           ## 🚀 Version Bump: ${{ inputs.version_type }}
-          
-          **Previous Version:** \`${{ steps.current_version.outputs.current }}\`  
+
+          **Previous Version:** \`${{ steps.current_version.outputs.current }}\`
           **New Version:** \`${{ steps.branch.outputs.new_version }}\`
-          
+
           ### 📋 Changes Made
           - ✅ Updated version in all Python files
-          - ✅ Updated version in Helm chart files  
+          - ✅ Updated version in Helm chart files
           - ✅ Updated version in Kubernetes manifests
           - ✅ Updated version in workflow files
           - ✅ Copied latest Python source files to Helm chart
-          
+
           ### 🔍 Files Updated
           - \`pyproject.toml\`
-          - \`src/__init__.py\` 
+          - \`src/__init__.py\`
           - \`src/main.py\`
           - \`k8s/deployment.yaml\`
           - \`charts/logpilot/Chart.yaml\`
           - \`charts/logpilot/src/__init__.py\`
           - \`charts/logpilot/pyproject.toml\`
           - \`.github/workflows/helm-publisher.yml\`
-          
+
           ### 🎯 Next Steps
           1. Review the changes in this PR
           2. Merge this PR to complete the version bump
           3. The Helm Chart Publisher workflow will automatically trigger
-          
+
           ---
           🤖 *This PR was automatically created by the Simple Version Bump workflow*
           EOF
