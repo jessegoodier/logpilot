@@ -52,15 +52,14 @@ jobs:
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
       - name: Update version in all files
         run: |
-
           echo "Updating version with bump-my-version from current to ${{ steps.new-version.outputs.new_version }}"
-          uv run bump-my-version bump --allow-dirty --new-version "${{ steps.new-version.outputs.new_version }}" patch
+          uv run bump-my-version bump --new-version "${{ steps.new-version.outputs.new_version }}" ${{ github.event.inputs.version_bump }}
 
           # Verify the version was updated correctly
           echo "=== Files updated ==="
           git diff --name-only
           echo "=== Version in key files ==="
-          grep -r "${{ steps.new-version.outputs.new_version }}" pyproject.toml src/__init__.py src/main.py || echo "Version check failed"
+          grep -r "${{ steps.new-version.outputs.new_version }}" pyproject.toml src/__init__.py src/main.py k8s/deployment.yaml || echo "Version check failed"
 
       - name: Commit version changes
         run: |
@@ -71,24 +70,11 @@ jobs:
           if git diff --staged --quiet; then
             echo "No version changes to commit"
           else
-            # Stash any unstaged changes
-            git stash
-
-            # Pull latest changes
-            git pull origin main
-
-            # Pop stashed changes
-            git stash pop || true
-
-            # Add files again after pop
-            git add pyproject.toml src/__init__.py src/main.py
-
             # Commit the version changes
             git commit -m "Bump version to ${{ steps.new-version.outputs.new_version }}" \
-              -m "Version bump: ${{ github.event.inputs.version_bump }}" \
-              -m "Previous version: ${{ steps.new-version.outputs.current-version }}"
+              -m "Version bump: ${{ github.event.inputs.version_bump }}"
 
-            # Push to version branch with force to handle any conflicts
+            # Push to version branch
             git push -f origin ${{ steps.create-branch.outputs.branch_name }}
             echo "✅ Version changes committed to version branch"
           fi
