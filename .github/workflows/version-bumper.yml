@@ -62,6 +62,8 @@ jobs:
             echo "Failed to update version with bump-my-version"
             exit 1
           fi
+          # cat the pyproject.toml file and print it to the console
+          cat pyproject.toml
       - name: Sync source files to chart
         run: |
           if ! cp -r src/* charts/logpilot/src/; then
