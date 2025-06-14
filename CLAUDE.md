@@ -55,6 +55,12 @@ The following commands are safe to run automatically without asking for permissi
 - `wc`, `sort`, `uniq` (text processing)
 - `docker images`, `docker ps` (read-only docker commands)
 
+### Version Management Commands
+- `bump-my-version show` (show current version and config)
+- `bump-my-version show-bump` (preview version increments)
+- `bump-my-version bump --dry-run <increment>` (test version bump without changes)
+- `grep -r "__version__\|version.*=" src/ charts/ pyproject.toml k8s/` (check version consistency)
+
 ## Commands That Require Permission
 
 ### Git Operations - Always Check First
@@ -229,13 +235,12 @@ uv pip install bump-my-version
 bump-my-version show
 
 # Preview what a version bump would do
-bump-my-version show-bump <current-version>
+bump-my-version show-bump
 
 # Bump version parts (dry run)
-bump-my-version bump --dry-run patch      # 0.3.5-dev → 0.3.6-dev
-bump-my-version bump --dry-run minor      # 0.3.5-dev → 0.4.0-dev  
-bump-my-version bump --dry-run major      # 0.3.5-dev → 1.0.0-dev
-bump-my-version bump --dry-run release    # 0.3.5-dev → 0.3.5
+bump-my-version bump --dry-run patch      # 0.3.5 → 0.3.6
+bump-my-version bump --dry-run minor      # 0.3.5 → 0.4.0  
+bump-my-version bump --dry-run major      # 0.3.5 → 1.0.0
 
 # Actually bump version (updates all configured files)
 bump-my-version bump --allow-dirty patch
@@ -255,10 +260,42 @@ bump-my-version bump --allow-dirty patch
 - `pyproject.toml` - Project version
 - `src/__init__.py` - Python package version  
 - `src/main.py` - Application version
-- `charts/logpilot/Chart.yaml` - Helm chart version
+- `charts/logpilot/Chart.yaml` - Helm chart version and appVersion
 - `charts/logpilot/pyproject.toml` - Chart package version
 - `charts/logpilot/src/__init__.py` - Chart source version
 - `k8s/deployment.yaml` - Container environment version
+
+#### Version Management Troubleshooting
+
+**Problem**: Version bumper workflow fails with "Did not find version in file" errors
+
+**Root Cause**: The chart files copied by the workflow (charts/logpilot/pyproject.toml, charts/logpilot/src/__init__.py) have different versions than the main source files.
+
+**Quick Diagnosis**:
+```bash
+# Check all version references to identify mismatches
+grep -r "__version__\|version.*=" src/ charts/logpilot/src/ pyproject.toml charts/logpilot/pyproject.toml k8s/deployment.yaml
+
+# Test bumpversion configuration
+source .venv/bin/activate
+bump-my-version bump --dry-run patch  # Should run without errors
+```
+
+**Fix**: Sync all files to same version before running workflow:
+```bash
+# Get current main version
+CURRENT_VERSION=$(grep 'version = ' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+echo "Main version: $CURRENT_VERSION"
+
+# Update chart files to match
+sed -i '' "s/__version__ = \".*\"/__version__ = \"$CURRENT_VERSION\"/" charts/logpilot/src/__init__.py
+sed -i '' "s/version = \".*\"/version = \"$CURRENT_VERSION\"/" charts/logpilot/pyproject.toml
+
+# Verify fix works
+bump-my-version bump --dry-run patch
+```
+
+**Prevention**: The bumpversion configuration in `pyproject.toml` should include ALL files that contain version references. If new version-containing files are added, they must be added to the `[[tool.bumpversion.files]]` sections.
 
 Note: The main branch uses placeholder version `0.0.0-dev`. The release workflow automatically updates all version references during the release process using the GitHub Actions version_manager.py script.
 
@@ -310,6 +347,19 @@ rm ruff-*.json ruff-*.txt
 ```
 
 ### Common GitHub Actions Issues
+
+#### Version Bumper Workflow Issues
+- **Problem**: "Did not find version in file" errors during version bump
+- **Quick Fix**: 
+  ```bash
+  # Check version mismatches across all files
+  grep -r "__version__\|version.*=" src/ charts/logpilot/src/ pyproject.toml charts/logpilot/pyproject.toml k8s/deployment.yaml | sort
+  
+  # Test the bumpversion config locally
+  source .venv/bin/activate && bump-my-version bump --dry-run patch
+  ```
+- **Root Cause**: Chart files have different versions than main source files
+- **Prevention**: Always ensure `pyproject.toml` bumpversion config includes ALL files with version references
 
 #### Ruff Command Issues
 - **Problem**: `ruff format` doesn't support `--output-format=json` 
