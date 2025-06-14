@@ -5,12 +5,7 @@ on:
       branch:
         description: "Branch to release from"
         required: true
-        type: choice
-        options:
-          - v0.3.10
-          - v0.4.0
-          - v0.4.2
-          - main
+        type: string
         default: v0.4.3
 jobs:
   helm-release:
