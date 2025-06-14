@@ -10,7 +10,7 @@ on:
           - v0.3.10
           - v0.4.0
           - main
-        default: "v0.3.10"
+        default: v0.4.0
 jobs:
   helm-release:
     runs-on: ubuntu-latest
