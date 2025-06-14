@@ -151,7 +151,12 @@
 
                 <div class="sm:col-span-2">
                     <label for="searchBox" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Search <a href="#" id="clearSearch" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Clear)</a></label>
-                    <input type="text" id="searchBox" placeholder="Enter to search..." class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <div class="mt-1 relative">
+                        <input type="text" id="searchBox" placeholder="Enter to search..." title="Search searches all available logs, not just the current page. Results are then limited by Lines per Page setting." class="block w-full py-2 px-3 pr-12 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <button id="caseSensitiveToggle" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none" title="Toggle case sensitivity">
+                            <span class="text-sm font-mono">Aa</span>
+                        </button>
+                    </div>
                 </div>
             </div>
             <div id="namespaceDisplay" class="mt-3 text-xs text-gray-500 dark:text-gray-400">Namespace: <span id="namespaceValue">Loading...</span></div>
@@ -212,9 +217,11 @@
             const closeStorageStats = document.getElementById('closeStorageStats');
             const storageStatsContent = document.getElementById('storageStatsContent');
             const appVersion = document.getElementById('appVersion');
+            const caseSensitiveToggle = document.getElementById('caseSensitiveToggle');
 
             let currentLogs = [];
             let currentPodName = null;
+            let caseSensitive = false;
 
             // --- Version Information ---
             async function fetchVersion() {
@@ -364,6 +371,30 @@
             });
 
             applyTheme();
+
+            // --- Case Sensitivity Toggle ---
+            const updateCaseSensitiveDisplay = () => {
+                if (caseSensitive) {
+                    caseSensitiveToggle.classList.remove('text-gray-400');
+                    caseSensitiveToggle.classList.add('text-indigo-600', 'dark:text-indigo-400');
+                    caseSensitiveToggle.title = 'Case sensitive search (click to toggle)';
+                } else {
+                    caseSensitiveToggle.classList.remove('text-indigo-600', 'dark:text-indigo-400');
+                    caseSensitiveToggle.classList.add('text-gray-400');
+                    caseSensitiveToggle.title = 'Case insensitive search (click to toggle)';
+                }
+            };
+
+            caseSensitiveToggle.addEventListener('click', (event) => {
+                event.preventDefault();
+                caseSensitive = !caseSensitive;
+                updateCaseSensitiveDisplay();
+                if (searchBox.value.trim()) {
+                    fetchAndDisplayLogs();
+                }
+            });
+
+            updateCaseSensitiveDisplay();
 
             // --- API Calls ---
             async function fetchFromServer(endpoint, options = {}) {
@@ -524,6 +555,7 @@
                     sort_order: sortOrder.value,
                     tail_lines: numLines.value,
                     search_string: searchBox.value.trim(),
+                    case_sensitive: caseSensitive.toString(),
                 });
 
                 // Add exclude_self parameter if needed
@@ -661,7 +693,8 @@
 
                     // Apply search highlighting on the potentially colorized message
                     if (searchTerm) {
-                        const searchRegex = new RegExp(`(${escapeRegExp(searchTerm)})`, 'gi');
+                        const searchFlags = caseSensitive ? 'g' : 'gi';
+                        const searchRegex = new RegExp(`(${escapeRegExp(searchTerm)})`, searchFlags);
                         coloredMessageContent = coloredMessageContent.replace(searchRegex, (match, p1) => {
                             const tempDiv = document.createElement('div');
                             tempDiv.innerHTML = coloredMessageContent;
