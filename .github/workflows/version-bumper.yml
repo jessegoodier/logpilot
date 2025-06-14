@@ -49,28 +49,25 @@ jobs:
           BRANCH_NAME="v${{ steps.new-version.outputs.new_version }}"
           git checkout -b $BRANCH_NAME
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
-      - name: Sync source files to chart
-        run: |
-          cp -r src/* charts/logpilot/src/
-          cp pyproject.toml charts/logpilot/
       - name: Update version in all files
         run: |
           echo "Updating version with bump-my-version from current to ${{ steps.new-version.outputs.new_version }}"
           uv run bump-my-version bump --new-version "${{ steps.new-version.outputs.new_version }}" ${{ github.event.inputs.version_bump }}
+      - name: Sync source files to chart
+        run: |
+          # Copy source files to chart directory (this preserves versions before bump)
+          cp -r src/* charts/logpilot/src/
+          cp pyproject.toml charts/logpilot/
       - name: Commit version changes
         run: |
           git add .
-          if git diff --staged --quiet; then
-            echo "No version changes to commit"
-          else
-            # Commit the version changes
-            git commit -m "Bump version to ${{ steps.new-version.outputs.new_version }}" \
-              -m "Version bump: ${{ github.event.inputs.version_bump }}"
+          # Commit the version changes
+          git commit -m "Bump version to ${{ steps.new-version.outputs.new_version }}" \
+            -m "Version bump: ${{ github.event.inputs.version_bump }}"
 
-            # Push to version branch
-            git push -f origin ${{ steps.create-branch.outputs.branch_name }}
-            echo "✅ Version changes committed to version branch"
-          fi
+          # Push to version branch
+          git push -f origin ${{ steps.create-branch.outputs.branch_name }}
+          echo "✅ Version changes committed to version branch"
       - name: Update Helm Bumper workflow with version branches
         run: |
           # adding the version branches to options in the helm-bumper.yml file
