@@ -152,10 +152,15 @@
                 <div class="sm:col-span-2">
                     <label for="searchBox" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Search <a href="#" id="clearSearch" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Clear)</a></label>
                     <div class="mt-1 relative">
-                        <input type="text" id="searchBox" placeholder="Enter to search..." title="Search searches all available logs, not just the current page. Results are then limited by Lines per Page setting." class="block w-full py-2 px-3 pr-12 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
-                        <button id="caseSensitiveToggle" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none" title="Toggle case sensitivity">
-                            <span class="text-sm font-mono">Aa</span>
-                        </button>
+                        <input type="text" id="searchBox" placeholder="Enter to search..." title="Search searches all available logs, not just the current page. Results are then limited by Lines per Page setting." class="block w-full py-2 px-3 pr-24 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center space-x-2">
+                            <button id="highlightToggle" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none" title="Toggle search term highlighting">
+                                <span class="text-sm font-mono">H</span>
+                            </button>
+                            <button id="caseSensitiveToggle" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none" title="Toggle case sensitivity">
+                                <span class="text-sm font-mono">Aa</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -218,10 +223,12 @@
             const storageStatsContent = document.getElementById('storageStatsContent');
             const appVersion = document.getElementById('appVersion');
             const caseSensitiveToggle = document.getElementById('caseSensitiveToggle');
+            const highlightToggle = document.getElementById('highlightToggle');
 
             let currentLogs = [];
             let currentPodName = null;
-            let caseSensitive = false;
+            let caseSensitive = localStorage.getItem('caseSensitive') === 'true';
+            let highlightEnabled = localStorage.getItem('highlightEnabled') !== 'false'; // Default to true if not set
 
             // --- Version Information ---
             async function fetchVersion() {
@@ -385,16 +392,40 @@
                 }
             };
 
+            // --- Highlight Toggle ---
+            const updateHighlightDisplay = () => {
+                if (highlightEnabled) {
+                    highlightToggle.classList.remove('text-gray-400');
+                    highlightToggle.classList.add('text-indigo-600', 'dark:text-indigo-400');
+                    highlightToggle.title = 'Search term highlighting enabled (click to toggle)';
+                } else {
+                    highlightToggle.classList.remove('text-indigo-600', 'dark:text-indigo-400');
+                    highlightToggle.classList.add('text-gray-400');
+                    highlightToggle.title = 'Search term highlighting disabled (click to toggle)';
+                }
+            };
+
             caseSensitiveToggle.addEventListener('click', (event) => {
                 event.preventDefault();
                 caseSensitive = !caseSensitive;
+                localStorage.setItem('caseSensitive', caseSensitive.toString());
                 updateCaseSensitiveDisplay();
                 if (searchBox.value.trim()) {
                     fetchAndDisplayLogs();
                 }
             });
 
+            highlightToggle.addEventListener('click', (event) => {
+                event.preventDefault();
+                highlightEnabled = !highlightEnabled;
+                localStorage.setItem('highlightEnabled', highlightEnabled.toString());
+                updateHighlightDisplay();
+                renderLogs(); // Just re-render the logs since we don't need to fetch again
+            });
+
+            // Initialize display states
             updateCaseSensitiveDisplay();
+            updateHighlightDisplay();
 
             // --- API Calls ---
             async function fetchFromServer(endpoint, options = {}) {
@@ -692,7 +723,7 @@
                     }
 
                     // Apply search highlighting on the potentially colorized message
-                    if (searchTerm) {
+                    if (searchTerm && highlightEnabled) {
                         const searchFlags = caseSensitive ? 'g' : 'gi';
                         const searchRegex = new RegExp(`(${escapeRegExp(searchTerm)})`, searchFlags);
                         coloredMessageContent = coloredMessageContent.replace(searchRegex, (match, p1) => {
