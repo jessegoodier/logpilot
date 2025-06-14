@@ -49,35 +49,17 @@ jobs:
           BRANCH_NAME="v${{ steps.new-version.outputs.new_version }}"
           git checkout -b $BRANCH_NAME
           echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
-      - name: Sync source files to chart (before version bump)
+      - name: Sync source files to chart
         run: |
-          # Ensure chart src directory exists
-          mkdir -p charts/logpilot/src
-
-          # Copy source files to chart directory (this preserves versions before bump)
           cp -r src/* charts/logpilot/src/
           cp pyproject.toml charts/logpilot/
-
-          # Verify files were copied
-          echo "Files in chart directory:"
-          ls -la charts/logpilot/
-          ls -la charts/logpilot/src/
       - name: Update version in all files
         run: |
           echo "Updating version with bump-my-version from current to ${{ steps.new-version.outputs.new_version }}"
           uv run bump-my-version bump --new-version "${{ steps.new-version.outputs.new_version }}" ${{ github.event.inputs.version_bump }}
-
-          # Verify the version was updated correctly
-          echo "=== Files updated ==="
-          git diff --name-only
-          echo "=== Version in key files ==="
-          grep -r "${{ steps.new-version.outputs.new_version }}" pyproject.toml src/__init__.py src/main.py k8s/deployment.yaml charts/logpilot/pyproject.toml charts/logpilot/src/__init__.py charts/logpilot/Chart.yaml || echo "Version check failed"
       - name: Commit version changes
         run: |
-          # Add all the version-updated files
           git add .
-
-          # Check if there are changes to commit
           if git diff --staged --quiet; then
             echo "No version changes to commit"
           else
@@ -110,7 +92,6 @@ jobs:
 
             ### Changes
             - Updated version in all relevant files
-            - Updated Python package version
             - Updated Helm Bumper workflow with available version branches
 
             Please review the changes and merge if everything looks correct.
