@@ -58,7 +58,7 @@ jobs:
       - name: Update version in all files
         run: |
           echo "Updating version with bump-my-version from current to ${{ steps.new-version.outputs.new_version }}"
-          if ! uv run bump-my-version bump --new-version "${{ steps.new-version.outputs.new_version }}" ${{ github.event.inputs.version_bump }}; then
+          if ! uv run bump-my-version bump --new-version "${{ steps.new-version.outputs.new_version }}" --allow-dirty; then
             echo "Failed to update version with bump-my-version"
             exit 1
           fi
