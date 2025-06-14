@@ -6,29 +6,16 @@ Give direct log access to your software engineers to see the logs without giving
 
 This application is designed to only monitor logs of pods in the namespace it is deployed to.
 
+More information about the application can be found in the [project readme](https://github.com/jessegoodier/logpilot).
+
 ## Installation
 
-### Install from web
+Install the latest version from the web in your namespace (using `kube-system` as an example):
 
-The name of the chart is logpilot. The recommended release name is `<namespace>-log`
-
-If you use this naming, the command:
 ```sh
-helm install kube-system-log \
+helm install logpilot \
   --repo https://jessegoodier.github.io/logpilot logpilot \
   -n kube-system
-```
-
-Will result in a Deployment named:
-
-`kube-system-log-logpilot`
-
-Install using the default values:
-
-```sh
-# Install with default settings
-helm install NAMESPACE-log \
-  --repo https://jessegoodier.github.io/logpilot logpilot
 ```
 
 Disable retaining logs of pods that have been terminated:
@@ -54,43 +41,43 @@ helm install logpilot \
 
 The following table lists the configurable parameters and their default values:
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `auth.apiKey` | API authentication key (set to "no-key" or empty to disable) | `"no-key"` |
-| `auth.existingSecret` | Use existing secret for API key | `""` |
-| `auth.existingSecretKey` | Key in existing secret containing API key | `"api-key"` |
-| `previousPodLogs.enabled` | Enable/disable log archival functionality | `true` |
-| `previousPodLogs.retentionMinutes` | Log retention period in minutes (7 days default) | `10080` |
-| `previousPodLogs.allowPurge` | Allow purging of previous pod logs | `true` |
-| `storage.type` | Storage type: "emptyDir" or "persistentVolume" | `emptyDir` |
-| `storage.persistentVolume.size` | PVC size when using persistent storage | `5Gi` |
-| `storage.persistentVolume.storageClass` | Storage class for PVC | `""` |
-| `storage.persistentVolume.accessModes` | Access modes for PVC | `["ReadWriteOnce"]` |
-| `replicaCount` | Number of replicas | `1` |
-| `image.repository` | Container image repository | `python` |
-| `image.tag` | Container image tag | `"3.13-slim"` |
-| `image.pullPolicy` | Image pull policy | `IfNotPresent` |
-| `ingress.enabled` | Enable ingress | `false` |
-| `ingress.annotations` | Ingress annotations | `{}` |
-| `ingress.ingressClassName` | Ingress class name | `""` |
-| `ingress.hosts` | Ingress hosts configuration | See values.yaml |
-| `ingress.tls` | Ingress TLS configuration | See values.yaml |
-| `service.type` | Service type | `ClusterIP` |
-| `service.port` | Service port | `5001` |
-| `resources.requests.memory` | Memory request | `"128Mi"` |
-| `resources.requests.cpu` | CPU request | `"100m"` |
-| `resources.limits.memory` | Memory limit | `"256Mi"` |
-| `resources.limits.cpu` | CPU limit | `"1500m"` |
-| `rbac.create` | Create RBAC resources | `true` |
-| `serviceAccount.create` | Create service account | `true` |
-| `serviceAccount.annotations` | Service account annotations | `{}` |
-| `serviceAccount.name` | Service account name | `""` |
+| Parameter                               | Description                                                  | Default             |
+| --------------------------------------- | ------------------------------------------------------------ | ------------------- |
+| `auth.apiKey`                           | API authentication key (set to "no-key" or empty to disable) | `"no-key"`          |
+| `auth.existingSecret`                   | Use existing secret for API key                              | `""`                |
+| `auth.existingSecretKey`                | Key in existing secret containing API key                    | `"api-key"`         |
+| `previousPodLogs.enabled`               | Enable/disable log archival functionality                    | `true`              |
+| `previousPodLogs.retentionMinutes`      | Log retention period in minutes (7 days default)             | `10080`             |
+| `previousPodLogs.allowPurge`            | Allow purging of previous pod logs                           | `true`              |
+| `storage.type`                          | Storage type: "emptyDir" or "persistentVolume"               | `emptyDir`          |
+| `storage.persistentVolume.size`         | PVC size when using persistent storage                       | `5Gi`               |
+| `storage.persistentVolume.storageClass` | Storage class for PVC                                        | `""`                |
+| `storage.persistentVolume.accessModes`  | Access modes for PVC                                         | `["ReadWriteOnce"]` |
+| `replicaCount`                          | Number of replicas                                           | `1`                 |
+| `image.repository`                      | Container image repository                                   | `python`            |
+| `image.tag`                             | Container image tag                                          | `"3.13-slim"`       |
+| `image.pullPolicy`                      | Image pull policy                                            | `IfNotPresent`      |
+| `ingress.enabled`                       | Enable ingress                                               | `false`             |
+| `ingress.annotations`                   | Ingress annotations                                          | `{}`                |
+| `ingress.ingressClassName`              | Ingress class name                                           | `""`                |
+| `ingress.hosts`                         | Ingress hosts configuration                                  | See values.yaml     |
+| `ingress.tls`                           | Ingress TLS configuration                                    | See values.yaml     |
+| `service.type`                          | Service type                                                 | `ClusterIP`         |
+| `service.port`                          | Service port                                                 | `5001`              |
+| `resources.requests.memory`             | Memory request                                               | `"128Mi"`           |
+| `resources.requests.cpu`                | CPU request                                                  | `"100m"`            |
+| `resources.limits.memory`               | Memory limit                                                 | `"256Mi"`           |
+| `resources.limits.cpu`                  | CPU limit                                                    | `"1500m"`           |
+| `rbac.create`                           | Create RBAC resources                                        | `true`              |
+| `serviceAccount.create`                 | Create service account                                       | `true`              |
+| `serviceAccount.annotations`            | Service account annotations                                  | `{}`                |
+| `serviceAccount.name`                   | Service account name                                         | `""`                |
 
 ## Examples
 
 ### Custom Values File
 
-Create a `custom-values.yaml` file:
+Create a `helmValues-logpilot.yaml` file:
 
 ```yaml
 auth:
@@ -134,7 +121,7 @@ Then install with:
 ```bash
 helm install logpilot \
   --repo https://jessegoodier.github.io/logpilot logpilot \
-  -f custom-values.yaml
+  -f helmValues-logpilot.yaml
 ```
 
 ## Features
@@ -161,6 +148,7 @@ The application exposes the following REST API endpoints:
 ## Security
 
 The chart creates minimal RBAC permissions:
+
 - List pods in the target namespace
 - Read pod logs in the target namespace
 
@@ -169,11 +157,13 @@ API key authentication is optional but recommended when exposing the ingress.
 ## Storage Considerations
 
 ### EmptyDir (Default)
+
 - Logs are stored in the pod's ephemeral storage
 - Data is lost when the pod is deleted or restarted
 - Suitable for development or when log persistence is not required
 
 ### Persistent Volume
+
 - Logs are stored on persistent storage
 - Data survives pod restarts and deletions
 
