@@ -62,38 +62,14 @@ jobs:
             echo "Failed to update version with bump-my-version"
             exit 1
           fi
-      - name: Update Helm chart versions
-        run: |
-          # Update both version and appVersion in Chart.yaml
-          if [ -f charts/logpilot/Chart.yaml ]; then
-            sed -i.bak -e "s/^version:.*/version: ${{ steps.new-version.outputs.new_version }}/" \
-                      -e "s/^appVersion:.*/appVersion: ${{ steps.new-version.outputs.new_version }}/" \
-                      charts/logpilot/Chart.yaml
-            rm -f charts/logpilot/Chart.yaml.bak
-          else
-            echo "Chart.yaml not found"
-            exit 1
-          fi
       - name: Sync source files to chart
         run: |
-          # Ensure chart src directory exists
-          mkdir -p charts/logpilot/src/
-
-          # Copy source files to chart directory
           if ! cp -r src/* charts/logpilot/src/; then
             echo "Failed to copy source files to chart directory"
             exit 1
           fi
-
-          # Copy pyproject.toml
           if ! cp pyproject.toml charts/logpilot/; then
             echo "Failed to copy pyproject.toml"
-            exit 1
-          fi
-
-          # Verify files were copied
-          if [ ! -d "charts/logpilot/src" ] || [ ! -f "charts/logpilot/pyproject.toml" ]; then
-            echo "Failed to verify copied files"
             exit 1
           fi
       - name: Commit version changes
@@ -107,10 +83,10 @@ jobs:
           # Push to version branch
           git push -f origin ${{ steps.create-branch.outputs.branch_name }}
           echo "✅ Version changes committed to version branch"
-      - name: Update Helm Bumper workflow with version branches
+      - name: Update Helm Publisher workflow with version branches
         run: |
-          # adding the version branches to options in the helm-bumper.yml file
-          if ! uv run python .github/scripts/update_helm_bumper.py; then
+          # adding the version branches to options in the helm-publisher.yml file
+          if ! uv run python .github/scripts/update_helm_publisher.py; then
             echo "Failed to update helm bumper workflow"
             exit 1
           fi

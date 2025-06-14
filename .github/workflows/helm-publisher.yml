@@ -1,4 +1,4 @@
-name: Helm Chart Bumper
+name: Helm Chart Publisher
 on:
   workflow_dispatch:
     inputs:

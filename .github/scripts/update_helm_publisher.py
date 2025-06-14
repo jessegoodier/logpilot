@@ -14,7 +14,7 @@ def update_workflow_file():
     yaml = YAML()
     yaml.preserve_quotes = True
     yaml.indent(mapping=2, sequence=4, offset=2)
-    with open(".github/workflows/helm-bumper.yml", "r") as f:
+    with open(".github/workflows/helm-publisher.yml", "r") as f:
         workflow = yaml.load(f)
 
     # Get version branches
@@ -31,7 +31,7 @@ def update_workflow_file():
         sys.exit(1)
 
     # Write the updated workflow file
-    with open(".github/workflows/helm-bumper.yml", "w") as f:
+    with open(".github/workflows/helm-publisher.yml", "w") as f:
         yaml.dump(workflow, f)
 
 

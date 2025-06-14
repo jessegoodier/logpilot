@@ -76,3 +76,13 @@ replace = "version: {new_version}"
 filename = "charts/logpilot/Chart.yaml"
 search = "appVersion: {current_version}"
 replace = "appVersion: {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "charts/logpilot/src/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "charts/logpilot/pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
