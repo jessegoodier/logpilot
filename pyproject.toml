@@ -1,6 +1,6 @@
 [project]
 name = "logPilot"
-version = "0.3.9"
+version = "0.3.10"
 description = "A simple Kubernetes log viewer web app"
 requires-python = ">=3.12"
 dependencies = [

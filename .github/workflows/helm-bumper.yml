@@ -7,8 +7,9 @@ on:
         required: true
         type: choice
         options:
+          - v0.3.10
           - main
-        default: "main"
+        default: "v0.3.10"
 jobs:
   helm-release:
     runs-on: ubuntu-latest
