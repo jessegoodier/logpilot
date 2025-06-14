@@ -1,4 +1,4 @@
-name: Simple Version Bump
+name: Version Bumper
 
 on:
   workflow_dispatch:
