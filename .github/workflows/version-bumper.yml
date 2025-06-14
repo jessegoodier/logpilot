@@ -29,7 +29,9 @@ jobs:
           python -m pip install uv --break-system-packages
           uv venv
           source .venv/bin/activate
+          # Install both script requirements and dev dependencies
           uv pip install -r .github/scripts/requirements.txt
+          uv pip install -e '.[dev]'
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Actions"
@@ -38,6 +40,10 @@ jobs:
         id: new-version
         run: |
           new_version=$(uv run bump-my-version show --increment ${{ github.event.inputs.version_bump }} new_version)
+          if [ -z "$new_version" ]; then
+            echo "Failed to determine new version"
+            exit 1
+          fi
           echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
           echo "new_version=$new_version"
         env:
@@ -52,12 +58,44 @@ jobs:
       - name: Update version in all files
         run: |
           echo "Updating version with bump-my-version from current to ${{ steps.new-version.outputs.new_version }}"
-          uv run bump-my-version bump --new-version "${{ steps.new-version.outputs.new_version }}" ${{ github.event.inputs.version_bump }}
+          if ! uv run bump-my-version bump --new-version "${{ steps.new-version.outputs.new_version }}" ${{ github.event.inputs.version_bump }}; then
+            echo "Failed to update version with bump-my-version"
+            exit 1
+          fi
+      - name: Update Helm chart versions
+        run: |
+          # Update both version and appVersion in Chart.yaml
+          if [ -f charts/logpilot/Chart.yaml ]; then
+            sed -i.bak -e "s/^version:.*/version: ${{ steps.new-version.outputs.new_version }}/" \
+                      -e "s/^appVersion:.*/appVersion: ${{ steps.new-version.outputs.new_version }}/" \
+                      charts/logpilot/Chart.yaml
+            rm -f charts/logpilot/Chart.yaml.bak
+          else
+            echo "Chart.yaml not found"
+            exit 1
+          fi
       - name: Sync source files to chart
         run: |
-          # Copy source files to chart directory (this preserves versions before bump)
-          cp -r src/* charts/logpilot/src/
-          cp pyproject.toml charts/logpilot/
+          # Ensure chart src directory exists
+          mkdir -p charts/logpilot/src/
+
+          # Copy source files to chart directory
+          if ! cp -r src/* charts/logpilot/src/; then
+            echo "Failed to copy source files to chart directory"
+            exit 1
+          fi
+
+          # Copy pyproject.toml
+          if ! cp pyproject.toml charts/logpilot/; then
+            echo "Failed to copy pyproject.toml"
+            exit 1
+          fi
+
+          # Verify files were copied
+          if [ ! -d "charts/logpilot/src" ] || [ ! -f "charts/logpilot/pyproject.toml" ]; then
+            echo "Failed to verify copied files"
+            exit 1
+          fi
       - name: Commit version changes
         run: |
           # Add all the version-updated files
@@ -72,7 +110,10 @@ jobs:
       - name: Update Helm Bumper workflow with version branches
         run: |
           # adding the version branches to options in the helm-bumper.yml file
-          uv run python .github/scripts/update_helm_bumper.py
+          if ! uv run python .github/scripts/update_helm_bumper.py; then
+            echo "Failed to update helm bumper workflow"
+            exit 1
+          fi
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
@@ -89,8 +130,9 @@ jobs:
             This PR was automatically created by the Version Bumper workflow.
 
             ### Changes
-            - Updated version in all relevant files
             - Updated Python package version
+            - Updated Helm chart version and appVersion
+            - Synchronized source files with chart directory
             - Updated Helm Bumper workflow with available version branches
 
             Please review the changes and merge if everything looks correct.
@@ -98,4 +140,4 @@ jobs:
             After merging, the Helm Chart Bumper workflow will automatically run to update the Helm chart version.
           branch: ${{ steps.create-branch.outputs.branch_name }}
           base: main
-          labels: "version-bump\nautomated-pr "
+          labels: "version-bump,automated-pr"
