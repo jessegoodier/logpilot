@@ -1,124 +1,136 @@
-name: Version Bumper
+name: Simple Version Bump
+
 on:
   workflow_dispatch:
     inputs:
-      version_bump:
+      version_type:
         description: "Version bump type"
         required: true
-        default: "patch"
         type: choice
         options:
           - patch
           - minor
           - major
+        default: patch
+
 jobs:
   version-bump:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
-      actions: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
+          fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
-      - name: Install and setup uv
+
+      - name: Install dependencies
         run: |
           python -m pip install uv --break-system-packages
           uv venv
           source .venv/bin/activate
-          # Install both script requirements and dev dependencies
-          uv pip install -r .github/scripts/requirements.txt
           uv pip install -e '.[dev]'
+
       - name: Configure Git
         run: |
-          git config --global user.name "GitHub Actions"
+          git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-      - name: Get new version
-        id: new-version
+
+      - name: Get current version
+        id: current_version
         run: |
-          new_version=$(uv run bump-my-version show --increment ${{ github.event.inputs.version_bump }} new_version)
-          if [ -z "$new_version" ]; then
-            echo "Failed to determine new version"
-            exit 1
-          fi
-          echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
-          echo "new_version=$new_version"
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          INPUT_VERSION_BUMP: ${{ github.event.inputs.version_bump }}
-      - name: Create version branch
-        id: create-branch
+          source .venv/bin/activate
+          current=$(bump-my-version show current_version)
+          echo "current=$current" >> $GITHUB_OUTPUT
+          echo "Current version: $current"
+
+      - name: Create version bump branch
+        id: branch
         run: |
-          BRANCH_NAME="v${{ steps.new-version.outputs.new_version }}"
-          git checkout -b $BRANCH_NAME
-          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
-      - name: Update version in all files
+          source .venv/bin/activate
+          new_version=$(bump-my-version show --increment ${{ inputs.version_type }} new_version)
+          branch_name="v$new_version"
+          git checkout -b $branch_name
+          echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+          echo "Created branch: $branch_name for version: $new_version"
+
+      - name: Copy Python files to Helm chart
         run: |
-          echo "Updating version with bump-my-version from current to ${{ steps.new-version.outputs.new_version }}"
-          if ! uv run bump-my-version bump --new-version "${{ steps.new-version.outputs.new_version }}" --allow-dirty; then
-            echo "Failed to update version with bump-my-version"
-            exit 1
-          fi
-          # cat the pyproject.toml file and print it to the console
-          cat pyproject.toml
-      - name: Sync source files to chart
+          echo "Copying Python source files to Helm chart..."
+          cp -r src/* charts/logpilot/src/
+          cp pyproject.toml charts/logpilot/
+          echo "Files copied successfully"
+
+      - name: Bump version in all files
         run: |
-          if ! cp -r src/* charts/logpilot/src/; then
-            echo "Failed to copy source files to chart directory"
-            exit 1
-          fi
-          if ! cp pyproject.toml charts/logpilot/; then
-            echo "Failed to copy pyproject.toml"
-            exit 1
-          fi
-      - name: Update Helm Publisher workflow with version branches
+          source .venv/bin/activate
+          echo "Bumping version with type: ${{ inputs.version_type }}"
+          bump-my-version bump ${{ inputs.version_type }} --allow-dirty
+          echo "Version bump completed"
+
+      - name: Commit changes
         run: |
-          # adding the version branches to options in the helm-publisher.yml file
-          if ! uv run python .github/scripts/update_helm_publisher.py; then
-            echo "Failed to update helm bumper workflow"
-            exit 1
-          fi
-      - name: Commit version changes
-        run: |
-          # Add all the version-updated files
           git add .
-          # Commit the version changes
-          git commit -m "Bump version to ${{ steps.new-version.outputs.new_version }}" \
-            -m "Version bump: ${{ github.event.inputs.version_bump }}"
+          git commit -m "Bump version to ${{ steps.branch.outputs.new_version }}
 
-          # Push to version branch
-          git push -f origin ${{ steps.create-branch.outputs.branch_name }}
-          echo "✅ Version changes committed to version branch"
+          - Updated all version references
+          - Copied Python source files to Helm chart
+          - Ready for release
+
+          🤖 Generated with [Claude Code](https://claude.ai/code)
+
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+
+      - name: Push branch
+        run: |
+          git push origin ${{ steps.branch.outputs.branch_name }}
+
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-          commit-message: "Bump version to ${{ steps.new-version.outputs.new_version }}"
-          title: "Version Bump: ${{ steps.new-version.outputs.new_version }}"
-          body: |
-            ## Version Bump PR
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head ${{ steps.branch.outputs.branch_name }} \
+            --title "🚀 Version Bump: ${{ steps.current_version.outputs.current }} → ${{ steps.branch.outputs.new_version }}" \
+            --body "$(cat <<'EOF'
+          ## 🚀 Version Bump: ${{ inputs.version_type }}
 
-            **Version Bump Type:** ${{ github.event.inputs.version_bump }}
-            **Previous Version:** ${{ steps.new-version.outputs.current-version }}
-            **New Version:** ${{ steps.new-version.outputs.new_version }}
+          **Previous Version:** \`${{ steps.current_version.outputs.current }}\`
+          **New Version:** \`${{ steps.branch.outputs.new_version }}\`
 
-            This PR was automatically created by the Version Bumper workflow.
+          ### 📋 Changes Made
+          - ✅ Updated version in all Python files
+          - ✅ Updated version in Helm chart files
+          - ✅ Updated version in Kubernetes manifests
+          - ✅ Updated version in workflow files
+          - ✅ Copied latest Python source files to Helm chart
 
-            ### Changes
-            - Updated Python package version
-            - Updated Helm chart version and appVersion
-            - Synchronized source files with chart directory
-            - Updated Helm Bumper workflow with available version branches
+          ### 🔍 Files Updated
+          - \`pyproject.toml\`
+          - \`src/__init__.py\`
+          - \`src/main.py\`
+          - \`k8s/deployment.yaml\`
+          - \`charts/logpilot/Chart.yaml\`
+          - \`charts/logpilot/src/__init__.py\`
+          - \`charts/logpilot/pyproject.toml\`
+          - \`.github/workflows/helm-publisher.yml\`
 
-            Please review the changes and merge if everything looks correct.
+          ### 🎯 Next Steps
+          1. Review the changes in this PR
+          2. Merge this PR to complete the version bump
+          3. The Helm Chart Publisher workflow will automatically trigger
 
-            After merging, the Helm Chart Bumper workflow will automatically run to update the Helm chart version.
-          branch: ${{ steps.create-branch.outputs.branch_name }}
-          base: main
-          labels: "version-bump,automated-pr"
+          ---
+          🤖 *This PR was automatically created by the Simple Version Bump workflow*
+          EOF
+          )" \
+            --label "version-bump,automated-pr"
