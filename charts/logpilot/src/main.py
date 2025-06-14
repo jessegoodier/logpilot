@@ -16,6 +16,9 @@ from flask import (
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
+# --- Version Configuration ---
+__version__ = "0.4.0"
+
 # --- Log Archiver Imports ---
 from log_archiver import start_log_cleanup_job, watch_pods_and_archive
 
@@ -216,10 +219,17 @@ def get_pods():
                 continue
             pod_name = pod.metadata.name
             containers = [container.name for container in pod.spec.containers]
-            if len(containers) == 1:
+            init_containers = [container.name for container in (pod.spec.init_containers or [])]
+
+            # Add init containers with "init-" prefix to distinguish them
+            for init_container in init_containers:
+                pod_info.append(f"{pod_name}/init-{init_container}")
+
+            # Add regular containers
+            if len(containers) == 1 and not init_containers:
                 pod_info.append(pod_name)
             else:
-                # For pods with multiple containers, add each container as pod/container
+                # For pods with multiple containers or any init containers, add each container as pod/container
                 for container in containers:
                     pod_info.append(f"{pod_name}/{container}")
 
@@ -270,15 +280,17 @@ def get_logs():
     Query Parameters:
         - pod_name (required): The name of the pod/container (format: 'pod' or 'pod/container') or 'all' for all pods.
         - sort_order (optional, default 'desc'): 'asc' (oldest first) or 'desc' (newest first).
-        - tail_lines (optional, default '100'): Number of lines to fetch. '0' means all lines.
-        - search_string (optional): String to filter log messages by (case-insensitive).
+        - tail_lines (optional, default '100'): Number of lines to fetch. '0' means all lines. When searching, all logs are fetched first, then filtered by search term, then limited by tail_lines.
+        - search_string (optional): String to filter log messages by.
+        - case_sensitive (optional, default 'false'): 'true' for case-sensitive search, 'false' for case-insensitive.
     Returns a JSON object with a list of log entries, each with 'timestamp', 'message', 'pod_name', and 'container_name'.
     """
     global KUBE_NAMESPACE, v1
     pod_name_req = request.args.get("pod_name")
     sort_order = request.args.get("sort_order", "desc").lower()
     tail_lines_str = request.args.get("tail_lines", "100")
-    search_string = request.args.get("search_string", "").strip().lower()
+    search_string = request.args.get("search_string", "").strip()
+    case_sensitive = request.args.get("case_sensitive", "false").lower() == "true"
 
     app.logger.info(
         f"Request for /api/logs: pod='{pod_name_req}', sort='{sort_order}', lines='{tail_lines_str}', search='{search_string}'"
@@ -295,6 +307,10 @@ def get_logs():
     except ValueError:
         return jsonify({"message": "Invalid number for tail_lines."}), 400
 
+    # When searching, fetch more logs to ensure we don't miss results
+    # If there's a search term, use a larger window or all logs
+    k8s_tail_lines = None if search_string else tail_lines
+
     try:
         if pod_name_req == "all":
             pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
@@ -305,15 +321,17 @@ def get_logs():
                     continue
 
                 pod_name = pod.metadata.name
-                for container in pod.spec.containers:
-                    container_name = container.name
+
+                # Process init containers first
+                for init_container in pod.spec.init_containers or []:
+                    container_name = f"init-{init_container.name}"
                     try:
                         log_data_stream = v1.read_namespaced_pod_log(
                             name=pod_name,
                             namespace=KUBE_NAMESPACE,
-                            container=container_name,
+                            container=init_container.name,
                             timestamps=True,
-                            tail_lines=tail_lines,
+                            tail_lines=k8s_tail_lines,
                             follow=False,
                             _preload_content=True,
                         )
@@ -322,8 +340,51 @@ def get_logs():
                             if not line_str:
                                 continue
                             log_entry = parse_log_line(line_str)
-                            if search_string and search_string not in log_entry["message"].lower():
+                            if search_string:
+                                search_text = log_entry["message"] if case_sensitive else log_entry["message"].lower()
+                                search_term = search_string if case_sensitive else search_string.lower()
+                                if search_term not in search_text:
+                                    continue
+                            log_entry["pod_name"] = pod_name
+                            log_entry["container_name"] = container_name
+                            all_logs.append(log_entry)
+                    except ApiException as e:
+                        app.logger.warning(
+                            f"Could not fetch logs for pod {pod_name} init container {init_container.name}: {e.status} - {e.reason}"
+                        )
+                        all_logs.append(
+                            {
+                                "pod_name": pod_name,
+                                "container_name": container_name,
+                                "timestamp": None,
+                                "message": f"Error fetching logs: {e.reason}",
+                                "error": True,
+                            }
+                        )
+
+                # Process regular containers
+                for container in pod.spec.containers:
+                    container_name = container.name
+                    try:
+                        log_data_stream = v1.read_namespaced_pod_log(
+                            name=pod_name,
+                            namespace=KUBE_NAMESPACE,
+                            container=container_name,
+                            timestamps=True,
+                            tail_lines=k8s_tail_lines,
+                            follow=False,
+                            _preload_content=True,
+                        )
+                        raw_log_lines = log_data_stream.splitlines()
+                        for line_str in raw_log_lines:
+                            if not line_str:
                                 continue
+                            log_entry = parse_log_line(line_str)
+                            if search_string:
+                                search_text = log_entry["message"] if case_sensitive else log_entry["message"].lower()
+                                search_term = search_string if case_sensitive else search_string.lower()
+                                if search_term not in search_text:
+                                    continue
                             log_entry["pod_name"] = pod_name
                             log_entry["container_name"] = container_name
                             all_logs.append(log_entry)
@@ -357,15 +418,24 @@ def get_logs():
             # Split pod_name into pod and container if it contains a slash
             pod_name = pod_name_req
             container_name = None
+
             if "/" in pod_name_req:
                 pod_name, container_name = pod_name_req.split("/", 1)
+                # Check if this is an init container (prefixed with "init-")
+                if container_name.startswith("init-"):
+                    # Remove the "init-" prefix to get the actual container name
+                    actual_container_name = container_name[5:]
+                else:
+                    actual_container_name = container_name
+            else:
+                actual_container_name = container_name
 
             log_data_stream = v1.read_namespaced_pod_log(
                 name=pod_name,
                 namespace=KUBE_NAMESPACE,
-                container=container_name,
+                container=actual_container_name,
                 timestamps=True,
-                tail_lines=tail_lines,
+                tail_lines=k8s_tail_lines,
                 follow=False,
                 _preload_content=True,
             )
@@ -376,8 +446,11 @@ def get_logs():
                 if not line_str:
                     continue
                 log_entry = parse_log_line(line_str)
-                if search_string and search_string not in log_entry["message"].lower():
-                    continue
+                if search_string:
+                    search_text = log_entry["message"] if case_sensitive else log_entry["message"].lower()
+                    search_term = search_string if case_sensitive else search_string.lower()
+                    if search_term not in search_text:
+                        continue
                 log_entry["pod_name"] = pod_name
                 if container_name:
                     log_entry["container_name"] = container_name
@@ -442,10 +515,17 @@ def get_archived_pods():
                 for pod in pod_list_response.items:
                     pod_name = pod.metadata.name
                     containers = [container.name for container in pod.spec.containers]
-                    if len(containers) == 1:
+                    init_containers = [container.name for container in (pod.spec.init_containers or [])]
+
+                    # Add init containers with "init-" prefix
+                    for init_container in init_containers:
+                        running_pod_containers.add(f"{pod_name}/init-{init_container}")
+
+                    # Add regular containers
+                    if len(containers) == 1 and not init_containers:
                         running_pod_containers.add(pod_name)
                     else:
-                        # For pods with multiple containers, add each container as pod/container
+                        # For pods with multiple containers or any init containers, add each container as pod/container
                         for container in containers:
                             running_pod_containers.add(f"{pod_name}/{container}")
                 app.logger.info(f"Found {len(running_pod_containers)} currently running pod/container combinations.")
@@ -455,13 +535,18 @@ def get_archived_pods():
                 running_pod_containers = set()
 
             # List archived log files and exclude currently running pods
-            for filename in os.listdir(LOG_DIR):
-                if filename.endswith(".log"):
-                    # Remove .log extension to get pod/container name
-                    pod_container = filename[:-4]
-                    # Exclude current pod and any currently running pods
-                    if KUBE_POD_NAME not in pod_container and pod_container not in running_pod_containers:
-                        archived_pod_names.append(pod_container)
+            # Use os.walk to search subdirectories since multi-container pods create subdirectories
+            for root, dirs, files in os.walk(LOG_DIR):
+                for filename in files:
+                    if filename.endswith(".log"):
+                        # Get relative path from LOG_DIR to construct pod/container name
+                        file_path = os.path.join(root, filename)
+                        relative_path = os.path.relpath(file_path, LOG_DIR)
+                        # Remove .log extension to get pod/container name
+                        pod_container = relative_path[:-4]
+                        # Exclude current pod and any currently running pods
+                        if KUBE_POD_NAME not in pod_container and pod_container not in running_pod_containers:
+                            archived_pod_names.append(pod_container)
 
             app.logger.info(f"Found {len(archived_pod_names)} previous (non-running) pod/container logs in {LOG_DIR}.")
         except OSError as e:
@@ -481,8 +566,9 @@ def get_archived_logs():
     Query Parameters:
         - pod_name (required): The name of the pod/container (format: 'pod' or 'pod/container').
         - sort_order (optional, default 'desc'): 'asc' or 'desc'.
-        - tail_lines (optional, default '0'): Number of lines. '0' for all.
+        - tail_lines (optional, default '0'): Number of lines. '0' for all. When searching, all logs are searched first, then filtered by search term, then limited by tail_lines.
         - search_string (optional): String to filter log messages.
+        - case_sensitive (optional, default 'false'): 'true' for case-sensitive search, 'false' for case-insensitive.
     """
     global LOG_DIR, RETAIN_ALL_POD_LOGS
     if not RETAIN_ALL_POD_LOGS:
@@ -494,7 +580,8 @@ def get_archived_logs():
     pod_name = request.args.get("pod_name")
     sort_order = request.args.get("sort_order", "desc").lower()
     tail_lines_str = request.args.get("tail_lines", "0")  # Default to all for previous
-    search_string = request.args.get("search_string", "").strip().lower()
+    search_string = request.args.get("search_string", "").strip()
+    case_sensitive = request.args.get("case_sensitive", "false").lower() == "true"
 
     app.logger.info(
         f"Request for /api/archived_logs: pod='{pod_name}', sort='{sort_order}', lines='{tail_lines_str}', search='{search_string}'"
@@ -528,8 +615,11 @@ def get_archived_logs():
             if not line_str.strip():
                 continue
             log_entry = parse_log_line(line_str)
-            if search_string and search_string not in log_entry["message"].lower():
-                continue
+            if search_string:
+                search_text = log_entry["message"] if case_sensitive else log_entry["message"].lower()
+                search_term = search_string if case_sensitive else search_string.lower()
+                if search_term not in search_text:
+                    continue
 
             # Add pod and container information
             if "/" in pod_name:
@@ -543,11 +633,17 @@ def get_archived_logs():
 
         app.logger.info(f"{len(processed_logs)} lines after search filter for archived pod/container '{pod_name}'.")
 
-        if sort_order == "desc":  # Newest first
-            processed_logs.reverse()
+        # Sort by timestamp
+        processed_logs.sort(
+            key=lambda x: x.get("timestamp") or "0000-00-00T00:00:00Z",
+            reverse=(sort_order == "desc"),
+        )
 
         if tail_lines is not None and tail_lines > 0:
-            processed_logs = processed_logs[:tail_lines]
+            if sort_order == "desc":
+                processed_logs = processed_logs[:tail_lines]
+            else:
+                processed_logs = processed_logs[-tail_lines:]
 
         return jsonify({"logs": processed_logs})
 
@@ -681,6 +777,15 @@ def purge_previous_logs():
     except Exception as e:
         app.logger.error(f"Error purging previous pod logs: {str(e)}", exc_info=True)
         return jsonify({"success": False, "message": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@app.route("/api/version", methods=["GET"])
+def get_version():
+    """
+    API endpoint to get the application version.
+    Returns a JSON object with the current version.
+    """
+    return jsonify({"version": __version__})
 
 
 # --- Main Execution ---
