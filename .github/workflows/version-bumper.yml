@@ -62,19 +62,19 @@ jobs:
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
           echo "Created branch: $branch_name for version: $new_version"
 
-      - name: Copy Python files to Helm chart
-        run: |
-          echo "Copying Python source files to Helm chart..."
-          cp -r src/* charts/logpilot/src/
-          cp pyproject.toml charts/logpilot/
-          echo "Files copied successfully"
-
       - name: Bump version in all files
         run: |
           source .venv/bin/activate
           echo "Bumping version with type: ${{ inputs.version_type }}"
           bump-my-version bump ${{ inputs.version_type }} --allow-dirty
           echo "Version bump completed"
+
+      - name: Copy Python files to Helm chart
+        run: |
+          echo "Copying Python files to Helm chart..."
+          cp -r src/* charts/logpilot/src/
+          cp pyproject.toml charts/logpilot/
+          echo "Files copied successfully"
 
       - name: Commit changes
         run: |
