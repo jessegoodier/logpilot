@@ -60,6 +60,7 @@ jobs:
           cp pyproject.toml charts/logpilot/
       - name: Commit version changes
         run: |
+          # Add all the version-updated files
           git add .
           # Commit the version changes
           git commit -m "Bump version to ${{ steps.new-version.outputs.new_version }}" \
@@ -89,6 +90,7 @@ jobs:
 
             ### Changes
             - Updated version in all relevant files
+            - Updated Python package version
             - Updated Helm Bumper workflow with available version branches
 
             Please review the changes and merge if everything looks correct.
