@@ -86,3 +86,8 @@ replace = "__version__ = \"{new_version}\""
 filename = "charts/logpilot/pyproject.toml"
 search = "version = \"{current_version}\""
 replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = ".github/workflows/helm-publisher.yml"
+search = "        default: \"v{current_version}\""
+replace = "        default: \"v{new_version}\""
