@@ -133,4 +133,4 @@ jobs:
           🤖 *This PR was automatically created by the Simple Version Bump workflow*
           EOF
           )" \
-            --label "version-bump,automated-pr,${{ inputs.version_type }}"
+            --label "version-bump,automated-pr"
