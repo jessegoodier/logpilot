@@ -11,7 +11,7 @@ on:
           - v0.4.0
           - v0.4.2
           - main
-        default: v0.4.1
+        default: v0.4.2
 jobs:
   helm-release:
     runs-on: ubuntu-latest
