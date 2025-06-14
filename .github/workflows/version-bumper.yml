@@ -30,7 +30,6 @@ jobs:
           uv venv
           source .venv/bin/activate
           uv pip install -r .github/scripts/requirements.txt
-
       - name: Configure Git
         run: |
           git config --global user.name "GitHub Actions"
@@ -60,7 +59,19 @@ jobs:
           git diff --name-only
           echo "=== Version in key files ==="
           grep -r "${{ steps.new-version.outputs.new_version }}" pyproject.toml src/__init__.py src/main.py k8s/deployment.yaml || echo "Version check failed"
+      - name: Sync source files to chart
+        run: |
+          # Ensure chart src directory exists
+          mkdir -p charts/logpilot/src
 
+          # Copy source files to chart directory
+          cp -r src/* charts/logpilot/src/
+          cp pyproject.toml charts/logpilot/
+
+          # Verify files were copied
+          echo "Files in chart directory:"
+          ls -la charts/logpilot/
+          ls -la charts/logpilot/src/
       - name: Commit version changes
         run: |
           # Add all the version-updated files
@@ -78,7 +89,6 @@ jobs:
             git push -f origin ${{ steps.create-branch.outputs.branch_name }}
             echo "✅ Version changes committed to version branch"
           fi
-
       - name: Update Helm Bumper workflow with version branches
         run: |
           # adding the version branches to options in the helm-bumper.yml file

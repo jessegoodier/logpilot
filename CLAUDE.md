@@ -340,8 +340,8 @@ helm install logpilot ./helm/logpilot -n log-viewer --create-namespace
 
 # Install with custom values
 helm install logpilot ./helm/logpilot -n log-viewer --create-namespace \
-  --set logArchival.enabled=true \
-  --set logArchival.allowPurge=false \
+  --set previousPodLogs.enabled=true \
+  --set previousPodLogs.allowPurge=false \
   --set auth.apiKey="your-secret-key"
 
 # Install with persistent storage
@@ -394,9 +394,9 @@ This is a Flask-based Kubernetes log viewer that provides a web UI for viewing p
 #### Helm Values
 When using the Helm chart, configuration is managed through `values.yaml`. Key settings include:
 
-- `logArchival.enabled` - Enable/disable log archival (default: true)
-- `logArchival.retentionMinutes` - Log retention period (default: 10080 = 7 days)
-- `logArchival.allowPurge` - Enable/disable log purge functionality (default: true)
+- `previousPodLogs.enabled` - Enable/disable log archival (default: true)
+- `previousPodLogs.retentionMinutes` - Log retention period (default: 10080 = 7 days)
+- `previousPodLogs.allowPurge` - Enable/disable log purge functionality (default: true)
 - `auth.apiKey` - API authentication key (default: "no-key" = disabled)
 - `storage.type` - Storage type: "emptyDir" or "persistentVolume" (default: emptyDir)
 - `storage.persistentVolume.size` - PVC size when using persistent storage (default: 5Gi)

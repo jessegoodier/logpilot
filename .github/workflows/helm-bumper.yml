@@ -49,36 +49,7 @@ jobs:
           helm plugin install https://github.com/helm-unittest/helm-unittest
       - name: Create dist directory
         run: mkdir -p dist
-      - name: Update Helm chart version
-        run: |
-          # Update version in Chart.yaml
-          sed -i "s/^version: .*/version: ${{ steps.version.outputs.version }}/" charts/logpilot/Chart.yaml
-          sed -i "s/^appVersion: .*/appVersion: ${{ steps.version.outputs.version }}/" charts/logpilot/Chart.yaml
-      - name: Sync source files to chart
-        run: |
-          # Ensure chart src directory exists
-          mkdir -p charts/logpilot/src
 
-          # Copy source files to chart directory
-          cp -r src/* charts/logpilot/src/
-          cp pyproject.toml charts/logpilot/
-
-          # Verify files were copied
-          echo "Files in chart directory:"
-          ls -la charts/logpilot/
-          ls -la charts/logpilot/src/
-      - name: Verify version updates
-        run: |
-          echo "=== Version Update Summary ==="
-          echo "Updated files with version ${{ steps.version.outputs.version }}:"
-
-          # Show what files were updated
-          git diff --name-only || echo "No changes detected"
-
-          # Show specific version changes
-          echo ""
-          echo "=== Version References Found ==="
-          grep -r "${{ steps.version.outputs.version }}" . --include="*.py" --include="*.yaml" --include="*.yml" --include="*.toml" | head -10
       - name: Run Helm tests before packaging
         run: |
           echo "Running Helm unit tests..."

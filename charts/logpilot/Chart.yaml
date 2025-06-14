@@ -2,19 +2,19 @@ apiVersion: v2
 name: logpilot
 description: A Helm chart for logPilot
 type: application
-version: 0.3.9
-appVersion: 0.3.9
+version: 0.3.10
+appVersion: 0.3.10
 keywords:
-  - kubernetes
-  - logs
-  - monitoring
-  - web
+- kubernetes
+- logs
+- monitoring
+- web
 home: https://github.com/jessegoodier/logPilot
 sources:
-  - https://github.com/jessegoodier/logPilot
+- https://github.com/jessegoodier/logPilot
 maintainers:
-  - name: Jesse Goodier
-    email: 31039225+jessegoodier@users.noreply.github.com
+- name: Jesse Goodier
+  email: 31039225+jessegoodier@users.noreply.github.com
 annotations:
   category: Monitoring
 icon: https://raw.githubusercontent.com/jessegoodier/logPilot/main/icon.png
