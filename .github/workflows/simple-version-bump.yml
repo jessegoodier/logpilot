@@ -94,42 +94,43 @@ jobs:
           git push origin ${{ steps.branch.outputs.branch_name }}
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-          branch: ${{ steps.branch.outputs.branch_name }}
-          title: "🚀 Version Bump: ${{ steps.current_version.outputs.current }} → ${{ steps.branch.outputs.new_version }}"
-          body: |
-            ## 🚀 Version Bump: ${{ inputs.version_type }}
-            
-            **Previous Version:** `${{ steps.current_version.outputs.current }}`  
-            **New Version:** `${{ steps.branch.outputs.new_version }}`
-            
-            ### 📋 Changes Made
-            - ✅ Updated version in all Python files
-            - ✅ Updated version in Helm chart files  
-            - ✅ Updated version in Kubernetes manifests
-            - ✅ Updated version in workflow files
-            - ✅ Copied latest Python source files to Helm chart
-            
-            ### 🔍 Files Updated
-            - `pyproject.toml`
-            - `src/__init__.py` 
-            - `src/main.py`
-            - `k8s/deployment.yaml`
-            - `charts/logpilot/Chart.yaml`
-            - `charts/logpilot/src/__init__.py`
-            - `charts/logpilot/pyproject.toml`
-            - `.github/workflows/helm-publisher.yml`
-            
-            ### 🎯 Next Steps
-            1. Review the changes in this PR
-            2. Merge this PR to complete the version bump
-            3. The Helm Chart Publisher workflow will automatically trigger
-            
-            ---
-            🤖 *This PR was automatically created by the Simple Version Bump workflow*
-          labels: |
-            version-bump
-            automated-pr
-            ${{ inputs.version_type }}
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head ${{ steps.branch.outputs.branch_name }} \
+            --title "🚀 Version Bump: ${{ steps.current_version.outputs.current }} → ${{ steps.branch.outputs.new_version }}" \
+            --body "$(cat <<'EOF'
+          ## 🚀 Version Bump: ${{ inputs.version_type }}
+          
+          **Previous Version:** \`${{ steps.current_version.outputs.current }}\`  
+          **New Version:** \`${{ steps.branch.outputs.new_version }}\`
+          
+          ### 📋 Changes Made
+          - ✅ Updated version in all Python files
+          - ✅ Updated version in Helm chart files  
+          - ✅ Updated version in Kubernetes manifests
+          - ✅ Updated version in workflow files
+          - ✅ Copied latest Python source files to Helm chart
+          
+          ### 🔍 Files Updated
+          - \`pyproject.toml\`
+          - \`src/__init__.py\` 
+          - \`src/main.py\`
+          - \`k8s/deployment.yaml\`
+          - \`charts/logpilot/Chart.yaml\`
+          - \`charts/logpilot/src/__init__.py\`
+          - \`charts/logpilot/pyproject.toml\`
+          - \`.github/workflows/helm-publisher.yml\`
+          
+          ### 🎯 Next Steps
+          1. Review the changes in this PR
+          2. Merge this PR to complete the version bump
+          3. The Helm Chart Publisher workflow will automatically trigger
+          
+          ---
+          🤖 *This PR was automatically created by the Simple Version Bump workflow*
+          EOF
+          )" \
+            --label "version-bump,automated-pr,${{ inputs.version_type }}"
