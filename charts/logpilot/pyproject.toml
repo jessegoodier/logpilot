@@ -1,23 +1,24 @@
 [project]
 name = "logPilot"
-version = "0.4.0"
+version = "0.4.1"
 description = "A simple Kubernetes log viewer web app"
 requires-python = ">=3.12"
-dependencies = [
-    "flask",
-    "kubernetes",
-    "requests"
+dependencies = ["flask", "kubernetes", "requests"]
+authors = [
+  { name = "Jesse Goodier", email = "31039225+jessegoodier@users.noreply.github.com" },
 ]
-authors = [ {name = "Jesse Goodier", email = "31039225+jessegoodier@users.noreply.github.com"} ]
 
 [project.optional-dependencies]
 dev = [
-    "playwright",
-    "gunicorn",
-    "pytest",
-    "pytest-playwright",
-    "black",
-    "ruff",
+  "playwright",
+  "gunicorn",
+  "pytest",
+  "pytest-playwright",
+  "ruff",
+  "isort",
+  "packaging",
+  "bump-my-version",
+  "ruamel-yaml",
 ]
 
 [build-system]
@@ -31,19 +32,62 @@ packages = ["."]
 line-length = 119
 target-version = "py312"
 
-[tool.black]
-line-length = 119
-target-version = [
-  'py312',
-]
-
 # ==== isort ====
 
 [tool.isort]
-profile = "black"
+profile = "black"                                 # Keep black profile for isort compatibility
 line_length = 119
-known_first_party = [
-  "tests",
-  "scripts",
-  "hooks",
-]
+known_first_party = ["tests", "scripts", "hooks"]
+
+# ==== bump-my-version ====
+
+[tool.bumpversion]
+current_version = "0.4.1"
+commit = false
+tag = false
+allow_dirty = true
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "src/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "src/main.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "k8s/deployment.yaml"
+search = "value: \"{current_version}\""
+replace = "value: \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "charts/logpilot/Chart.yaml"
+search = "version: {current_version}"
+replace = "version: {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "charts/logpilot/Chart.yaml"
+search = "appVersion: {current_version}"
+replace = "appVersion: {new_version}"
+
+[[tool.bumpversion.files]]
+filename = "charts/logpilot/src/__init__.py"
+search = "__version__ = \"{current_version}\""
+replace = "__version__ = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = "charts/logpilot/pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+
+[[tool.bumpversion.files]]
+filename = ".github/workflows/helm-publisher.yml"
+search = "          - v{current_version}"
+replace = "          - v{new_version}"
