@@ -2,7 +2,9 @@ import json
 import logging
 import os
 import re
+import time
 from functools import wraps
+from html import escape
 
 from flask import (
     Flask,
@@ -244,12 +246,222 @@ def get_last_log_timestamp(pod_name, container_name=None):
         return None
 
 
-def parse_log_line(line_str):
+def strip_ansi_codes(text):
+    """
+    Remove ANSI escape sequences from text.
+    This includes color codes, cursor movement, and other control sequences.
+    """
+    # ANSI escape sequence pattern
+    # Matches: ESC[ followed by parameter bytes (0x30-0x3F), then intermediate bytes (0x20-0x2F), then final byte (0x40-0x7E)
+    ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+    return ansi_escape.sub("", text)
+
+
+def convert_ansi_to_html(text):
+    """
+    Convert basic ANSI color codes to HTML spans with CSS classes.
+    Strips other ANSI codes and escapes HTML characters.
+    """
+    # First escape HTML characters to prevent XSS
+    text = escape(text)
+
+    # Basic ANSI color mappings to CSS classes
+    color_map = {
+        "30": "ansi-black",
+        "90": "ansi-bright-black",
+        "31": "ansi-red",
+        "91": "ansi-bright-red",
+        "32": "ansi-green",
+        "92": "ansi-bright-green",
+        "33": "ansi-yellow",
+        "93": "ansi-bright-yellow",
+        "34": "ansi-blue",
+        "94": "ansi-bright-blue",
+        "35": "ansi-magenta",
+        "95": "ansi-bright-magenta",
+        "36": "ansi-cyan",
+        "96": "ansi-bright-cyan",
+        "37": "ansi-white",
+        "97": "ansi-bright-white",
+    }
+
+    # Convert basic color codes to HTML spans
+    for code, css_class in color_map.items():
+        text = re.sub(f"\x1b\[{code}m", f'<span class="{css_class}">', text)
+
+    # Handle reset codes
+    text = re.sub(r"\x1B\[0m", "</span>", text)
+
+    # Strip remaining ANSI codes
+    text = strip_ansi_codes(text)
+
+    return text
+
+
+def sanitize_log_message(message, strip_ansi=True, max_length=10000):
+    """
+    Sanitize log message by removing/converting ANSI codes and limiting length.
+
+    Args:
+        message: Raw log message string
+        strip_ansi: If True, remove ANSI codes; if False, convert to HTML
+        max_length: Maximum message length (prevents memory issues)
+
+    Returns:
+        Sanitized message string
+    """
+    if not message:
+        return message
+
+    # Truncate extremely long messages to prevent memory issues
+    if len(message) > max_length:
+        message = message[:max_length] + " [... truncated]"
+
+    # Handle ANSI codes
+    if strip_ansi:
+        message = strip_ansi_codes(message)
+    else:
+        message = convert_ansi_to_html(message)
+
+    return message
+
+
+def retry_k8s_operation(max_retries=3, initial_delay=0.5, backoff_factor=2.0):
+    """
+    Decorator to retry Kubernetes operations with exponential backoff.
+
+    Args:
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay between retries in seconds
+        backoff_factor: Multiplier for delay between retries
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            delay = initial_delay
+
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except ApiException as e:
+                    last_exception = e
+                    # Don't retry on certain HTTP status codes
+                    if e.status in [400, 401, 403, 404]:
+                        break
+
+                    if attempt < max_retries:
+                        app.logger.warning(
+                            f"Kubernetes API call failed (attempt {attempt + 1}/{max_retries + 1}): "
+                            f"{e.status} - {e.reason}. Retrying in {delay:.1f}s..."
+                        )
+                        time.sleep(delay)
+                        delay *= backoff_factor
+                    else:
+                        app.logger.error(
+                            f"Kubernetes API call failed after {max_retries + 1} attempts: {e.status} - {e.reason}"
+                        )
+                except Exception as e:
+                    last_exception = e
+                    # Don't retry on non-API exceptions
+                    break
+
+            # Re-raise the last exception
+            raise last_exception
+
+        return wrapper
+
+    return decorator
+
+
+def format_k8s_error(e):
+    """
+    Format Kubernetes API exception into user-friendly error message.
+
+    Args:
+        e: ApiException from Kubernetes client
+
+    Returns:
+        tuple: (user_message, http_status_code)
+    """
+    if e.status == 400:
+        # Try to extract detailed error message from response body
+        error_message = e.reason
+        if e.body:
+            try:
+                error_details = json.loads(e.body)
+                message = error_details.get("message", "")
+                # Check if the error is due to container not being ready
+                if (
+                    "not found" in message.lower()
+                    or "not ready" in message.lower()
+                    or "containercreating" in message.lower()
+                ):
+                    return "Container is not ready yet", 400
+            except json.JSONDecodeError:
+                pass
+        return f"Invalid request parameters: {error_message}", 400
+    elif e.status == 401:
+        return "Authentication required - check service account permissions", 401
+    elif e.status == 403:
+        return "Access denied - insufficient permissions to access this resource", 403
+    elif e.status == 404:
+        return "Resource not found - pod may have been deleted", 404
+    elif e.status == 429:
+        return "Rate limited - too many requests, please try again later", 429
+    elif e.status >= 500:
+        return "Kubernetes cluster error - please try again later", 503
+    else:
+        # Try to extract detailed error message from response body
+        error_message = e.reason
+        if e.body:
+            try:
+                error_details = json.loads(e.body)
+                if "message" in error_details:
+                    error_message = error_details["message"]
+                elif "reason" in error_details:
+                    error_message = error_details["reason"]
+            except json.JSONDecodeError:
+                # Include truncated body if JSON parsing fails
+                error_message = f"{e.reason} (Details: {e.body[:200]})"
+
+        return f"Kubernetes API error: {error_message}", e.status
+
+
+def create_error_log_entry(pod_name, container_name, error_message, error_type="api_error"):
+    """
+    Create a standardized error log entry for display in the log viewer.
+
+    Args:
+        pod_name: Name of the pod
+        container_name: Name of the container (optional)
+        error_message: Human-readable error message
+        error_type: Type of error for categorization
+
+    Returns:
+        dict: Log entry with error information
+    """
+    return {
+        "pod_name": pod_name,
+        "container_name": container_name,
+        "timestamp": None,
+        "message": f"[{error_type.upper()}] {error_message}",
+        "error": True,
+        "error_type": error_type,
+    }
+
+
+def parse_log_line(line_str, strip_ansi=True):
     """
     Parses a log line that typically starts with an RFC3339Nano timestamp.
     Example: "2021-09-01T12:34:56.123456789Z This is the log message."
     Returns a dictionary {'timestamp': str, 'message': str} or
     {'timestamp': None, 'message': original_line} if no timestamp is parsed.
+
+    Args:
+        line_str: Raw log line string
+        strip_ansi: If True, remove ANSI codes from message
     """
     # Regex to capture RFC3339Nano timestamp (YYYY-MM-DDTHH:MM:SS.sssssssssZ)
     # and the rest of the line as the message.
@@ -258,10 +470,12 @@ def parse_log_line(line_str):
     if match:
         timestamp_str = match.group(1)
         message_str = match.group(3).strip()  # Get the message part and strip any trailing whitespace
+        message_str = sanitize_log_message(message_str, strip_ansi=strip_ansi)
         return {"timestamp": timestamp_str, "message": message_str}
     else:
         # If no timestamp is found at the beginning, return the whole line as the message.
-        return {"timestamp": None, "message": line_str.strip()}
+        sanitized_line = sanitize_log_message(line_str.strip(), strip_ansi=strip_ansi)
+        return {"timestamp": None, "message": sanitized_line}
 
 
 # --- Routes ---
@@ -274,6 +488,26 @@ def serve_index():
     """
     app.logger.info(f"Serving index.html for request from {request.remote_addr}")
     return send_from_directory(app.static_folder, "index.html")
+
+
+@retry_k8s_operation(max_retries=2, initial_delay=0.3)
+def _list_pods_with_retry():
+    """Helper function to list pods with retry logic."""
+    return v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
+
+
+@retry_k8s_operation(max_retries=2, initial_delay=0.3)
+def _fetch_pod_logs_with_retry(pod_name, container_name=None, tail_lines=None):
+    """Helper function to fetch pod logs with retry logic."""
+    return v1.read_namespaced_pod_log(
+        name=pod_name,
+        namespace=KUBE_NAMESPACE,
+        container=container_name,
+        timestamps=True,
+        tail_lines=tail_lines,
+        follow=False,
+        _preload_content=True,
+    )
 
 
 @app.route("/api/pods", methods=["GET"])
@@ -289,7 +523,7 @@ def get_pods():
     exclude_self = request.args.get("exclude_self", "").lower() == "true"
 
     try:
-        pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
+        pod_list_response = _list_pods_with_retry()
         pod_info = []
 
         for pod in pod_list_response.items:
@@ -370,10 +604,23 @@ def get_pods():
         )
     except ApiException as e:
         app.logger.error(f"Kubernetes API error fetching pods: {e.status} - {e.reason} - {e.body}")
-        return jsonify({"message": f"Error fetching pods: {e.reason}"}), e.status
+        error_message, status_code = format_k8s_error(e)
+        return jsonify(
+            {
+                "message": error_message,
+                "error_type": "kubernetes_api_error",
+                "retry_suggested": status_code >= 500 or status_code == 429,
+            }
+        ), status_code
     except Exception as e:
-        app.logger.error(f"Unexpected error fetching pods: {str(e)}")
-        return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
+        app.logger.error(f"Unexpected error fetching pods: {str(e)}", exc_info=True)
+        return jsonify(
+            {
+                "message": "An unexpected error occurred while fetching pod information",
+                "error_type": "internal_error",
+                "retry_suggested": False,
+            }
+        ), 500
 
 
 @app.route("/ready", methods=["GET"])
@@ -453,14 +700,8 @@ def get_logs():
                 for init_container in pod.spec.init_containers or []:
                     container_name = f"init-{init_container.name}"
                     try:
-                        log_data_stream = v1.read_namespaced_pod_log(
-                            name=pod_name,
-                            namespace=KUBE_NAMESPACE,
-                            container=init_container.name,
-                            timestamps=True,
-                            tail_lines=k8s_tail_lines,
-                            follow=False,
-                            _preload_content=True,
+                        log_data_stream = _fetch_pod_logs_with_retry(
+                            pod_name=pod_name, container_name=init_container.name, tail_lines=k8s_tail_lines
                         )
                         raw_log_lines = log_data_stream.splitlines()
                         for line_str in raw_log_lines:
@@ -479,28 +720,21 @@ def get_logs():
                         app.logger.warning(
                             f"Could not fetch logs for pod {pod_name} init container {init_container.name}: {e.status} - {e.reason}"
                         )
-                        all_logs.append(
-                            {
-                                "pod_name": pod_name,
-                                "container_name": container_name,
-                                "timestamp": None,
-                                "message": f"Error fetching logs: {e.reason}",
-                                "error": True,
-                            }
+                        error_message, _ = format_k8s_error(e)
+                        error_entry = create_error_log_entry(
+                            pod_name=pod_name,
+                            container_name=container_name,
+                            error_message=error_message,
+                            error_type="log_fetch_error",
                         )
+                        all_logs.append(error_entry)
 
                 # Process regular containers
                 for container in pod.spec.containers:
                     container_name = container.name
                     try:
-                        log_data_stream = v1.read_namespaced_pod_log(
-                            name=pod_name,
-                            namespace=KUBE_NAMESPACE,
-                            container=container_name,
-                            timestamps=True,
-                            tail_lines=k8s_tail_lines,
-                            follow=False,
-                            _preload_content=True,
+                        log_data_stream = _fetch_pod_logs_with_retry(
+                            pod_name=pod_name, container_name=container_name, tail_lines=k8s_tail_lines
                         )
                         raw_log_lines = log_data_stream.splitlines()
                         for line_str in raw_log_lines:
@@ -519,15 +753,14 @@ def get_logs():
                         app.logger.warning(
                             f"Could not fetch logs for pod {pod_name} container {container_name}: {e.status} - {e.reason}"
                         )
-                        all_logs.append(
-                            {
-                                "pod_name": pod_name,
-                                "container_name": container_name,
-                                "timestamp": None,
-                                "message": f"Error fetching logs: {e.reason}",
-                                "error": True,
-                            }
+                        error_message, _ = format_k8s_error(e)
+                        error_entry = create_error_log_entry(
+                            pod_name=pod_name,
+                            container_name=container_name,
+                            error_message=error_message,
+                            error_type="log_fetch_error",
                         )
+                        all_logs.append(error_entry)
 
             all_logs.sort(
                 key=lambda x: x.get("timestamp") or "0000-00-00T00:00:00Z",
@@ -557,14 +790,8 @@ def get_logs():
             else:
                 actual_container_name = container_name
 
-            log_data_stream = v1.read_namespaced_pod_log(
-                name=pod_name,
-                namespace=KUBE_NAMESPACE,
-                container=actual_container_name,
-                timestamps=True,
-                tail_lines=k8s_tail_lines,
-                follow=False,
-                _preload_content=True,
+            log_data_stream = _fetch_pod_logs_with_retry(
+                pod_name=pod_name, container_name=actual_container_name, tail_lines=k8s_tail_lines
             )
 
             raw_log_lines = log_data_stream.splitlines()
@@ -600,20 +827,46 @@ def get_logs():
         app.logger.error(
             f"Kubernetes API error processing logs for '{pod_name_req}': {e.status} - {e.reason} - {e.body}"
         )
-        error_message = e.reason
-        if e.body:
-            try:
-                error_details = json.loads(e.body)
-                error_message = error_details.get("message", e.reason)
-            except json.JSONDecodeError:  # pragma: no cover
-                error_message = f"{e.reason} (Details: {e.body[:200]})"
-        return jsonify({"message": f"Error fetching logs: {error_message}"}), e.status
+        error_message, status_code = format_k8s_error(e)
+
+        # For container not ready, create an informational entry instead of an error
+        if status_code == 400 and "not ready" in error_message.lower():
+            return jsonify(
+                {
+                    "logs": [
+                        {
+                            "pod_name": pod_name_req.split("/")[0] if "/" in pod_name_req else pod_name_req,
+                            "container_name": pod_name_req.split("/")[1] if "/" in pod_name_req else None,
+                            "timestamp": None,
+                            "message": f"[logPilot] {error_message}",
+                            "error": False,
+                            "error_type": "logpilot_info",
+                        }
+                    ]
+                }
+            ), 200  # Return 200 since this is an expected state
+
+        return jsonify(
+            {
+                "message": error_message,
+                "error_type": "kubernetes_api_error",
+                "retry_suggested": status_code >= 500 or status_code == 429,
+                "pod_name": pod_name_req,
+            }
+        ), status_code
     except Exception as e:
         app.logger.error(
             f"Unexpected error processing logs for '{pod_name_req}': {str(e)}",
             exc_info=True,
         )
-        return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
+        return jsonify(
+            {
+                "message": "An unexpected error occurred while processing log request",
+                "error_type": "internal_error",
+                "retry_suggested": False,
+                "pod_name": pod_name_req,
+            }
+        ), 500
 
 
 @app.route("/api/archived_pods", methods=["GET"])

@@ -45,6 +45,66 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        /* ANSI Color Classes */
+        .ansi-black { color: #2d3748; }
+        .ansi-red { color: #e53e3e; }
+        .ansi-green { color: #38a169; }
+        .ansi-yellow { color: #d69e2e; }
+        .ansi-blue { color: #3182ce; }
+        .ansi-magenta { color: #d53f8c; }
+        .ansi-cyan { color: #319795; }
+        .ansi-white { color: #f7fafc; }
+        
+        .ansi-bright-black { color: #4a5568; }
+        .ansi-bright-red { color: #fc8181; }
+        .ansi-bright-green { color: #68d391; }
+        .ansi-bright-yellow { color: #f6e05e; }
+        .ansi-bright-blue { color: #63b3ed; }
+        .ansi-bright-magenta { color: #f687b3; }
+        .ansi-bright-cyan { color: #4fd1c7; }
+        .ansi-bright-white { color: #ffffff; }
+        
+        /* Dark mode ANSI colors */
+        .dark .ansi-black { color: #718096; }
+        .dark .ansi-red { color: #fc8181; }
+        .dark .ansi-green { color: #68d391; }
+        .dark .ansi-yellow { color: #f6e05e; }
+        .dark .ansi-blue { color: #63b3ed; }
+        .dark .ansi-magenta { color: #f687b3; }
+        .dark .ansi-cyan { color: #4fd1c7; }
+        .dark .ansi-white { color: #f7fafc; }
+        
+        /* Error styling */
+        .log-error {
+            background-color: #fed7d7;
+            color: #c53030;
+            border-left: 4px solid #e53e3e;
+            padding: 0.25rem 0.5rem;
+            margin: 0.125rem 0;
+        }
+        .dark .log-error {
+            background-color: #742a2a;
+            color: #fc8181;
+            border-left-color: #fc8181;
+        }
+        
+        /* Retry button styling */
+        .retry-button {
+            display: inline-block;
+            margin-left: 0.5rem;
+            padding: 0.125rem 0.25rem;
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .retry-button:hover {
+            background-color: #3182ce;
+        }
     </style>
     <script>
         // Tailwind dark mode configuration
@@ -435,13 +495,31 @@
                     const response = await fetch(absoluteUrl, options);
 
                     if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({ message: `HTTP error! status: ${response.status} on ${absoluteUrl}` }));
-                        throw new Error(errorData.message || `HTTP error! status: ${response.status} on ${absoluteUrl}`);
+                        const errorData = await response.json().catch(() => ({ 
+                            message: `HTTP error! status: ${response.status} on ${absoluteUrl}`,
+                            error_type: 'http_error',
+                            retry_suggested: response.status >= 500 || response.status === 429
+                        }));
+                        
+                        // Enhanced error with metadata
+                        const enhancedError = new Error(errorData.message || `HTTP error! status: ${response.status} on ${absoluteUrl}`);
+                        enhancedError.errorType = errorData.error_type || 'http_error';
+                        enhancedError.retrySuggested = errorData.retry_suggested || false;
+                        enhancedError.statusCode = response.status;
+                        enhancedError.endpoint = endpoint;
+                        throw enhancedError;
                     }
                     return await response.json();
                 } catch (error) {
                     console.error(`Error fetching ${endpoint} (resolved to ${new URL(endpoint, window.location.href).href}):`, error);
-                    errorDisplay.textContent = `Error: ${error.message}`;
+                    
+                    // Enhanced error display with retry suggestion
+                    let errorMessage = `Error: ${error.message}`;
+                    if (error.retrySuggested) {
+                        errorMessage += ' (Retry recommended)';
+                    }
+                    errorDisplay.textContent = errorMessage;
+                    
                     throw error;
                 }
             }
@@ -780,8 +858,26 @@
                 } catch (error) {
                     console.error('Error in fetchAndDisplayLogs:', error);
                     currentLogs = [];
-                    errorDisplay.textContent = `Error loading logs: ${error.message}`;
-                    logOutput.textContent = 'Error loading logs. Check console for details.';
+                    
+                    // Create a detailed error message
+                    let errorMessage = `Error loading logs: ${error.message}`;
+                    if (error.retrySuggested) {
+                        errorMessage += ' (Retry recommended)';
+                    }
+                    errorDisplay.textContent = errorMessage;
+                    
+                    // Create an error log entry for display
+                    const errorLogEntry = {
+                        error: true,
+                        message: error.message,
+                        error_type: error.errorType || 'unknown_error',
+                        retry_suggested: error.retrySuggested !== false,
+                        timestamp: null,
+                        pod_name: actualPodName || 'unknown'
+                    };
+                    
+                    currentLogs = [errorLogEntry];
+                    renderLogs();
                 } finally {
                     loadingIndicator.classList.add('hidden');
                 }
@@ -849,6 +945,26 @@
                 currentLogs.forEach(logEntry => {
                     const lineDiv = document.createElement('div');
                     lineDiv.classList.add('log-line', 'py-0.5');
+                    
+                    // Handle error entries specially
+                    if (logEntry.error) {
+                        lineDiv.classList.add('log-error');
+                        const errorDiv = document.createElement('div');
+                        errorDiv.innerHTML = logEntry.message || 'Unknown error';
+                        
+                        // Add retry button if retry is suggested
+                        if (logEntry.retry_suggested !== false) {
+                            const retryButton = document.createElement('button');
+                            retryButton.textContent = 'Retry';
+                            retryButton.className = 'retry-button';
+                            retryButton.onclick = () => fetchAndDisplayLogs();
+                            errorDiv.appendChild(retryButton);
+                        }
+                        
+                        lineDiv.appendChild(errorDiv);
+                        fragment.appendChild(lineDiv);
+                        return;
+                    }
 
                     // Assign color to pod if viewing all pods
                     if (podSelector.value === 'all' && logEntry.pod_name) {
