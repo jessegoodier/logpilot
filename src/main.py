@@ -167,6 +167,83 @@ def login():
 
 
 # --- Helper Functions ---
+def get_pod_health_status(pod):
+    """
+    Determine the health status of a pod based on its phase and container statuses.
+    Returns a dict with 'status' and 'reason' fields.
+    """
+    try:
+        phase = pod.status.phase
+
+        # Handle basic phases
+        if phase == "Pending":
+            return {"status": "pending", "reason": "Pod is pending"}
+        elif phase == "Failed":
+            return {"status": "failed", "reason": "Pod has failed"}
+        elif phase == "Succeeded":
+            return {"status": "succeeded", "reason": "Pod has succeeded"}
+
+        # For Running phase, check container statuses
+        if phase == "Running":
+            if not pod.status.container_statuses:
+                return {"status": "unknown", "reason": "No container status available"}
+
+            total_containers = len(pod.status.container_statuses)
+            ready_containers = sum(1 for cs in pod.status.container_statuses if cs.ready)
+
+            if ready_containers == total_containers:
+                return {"status": "healthy", "reason": f"All {total_containers} containers ready"}
+            elif ready_containers > 0:
+                return {"status": "partial", "reason": f"{ready_containers}/{total_containers} containers ready"}
+            else:
+                # Check for specific container issues
+                for cs in pod.status.container_statuses:
+                    if cs.state.waiting:
+                        return {"status": "waiting", "reason": f"Waiting: {cs.state.waiting.reason or 'Unknown'}"}
+                    elif cs.state.terminated:
+                        return {
+                            "status": "terminated",
+                            "reason": f"Terminated: {cs.state.terminated.reason or 'Unknown'}",
+                        }
+
+                return {"status": "unhealthy", "reason": "No containers ready"}
+
+        return {"status": "unknown", "reason": f"Unknown phase: {phase}"}
+
+    except Exception as e:
+        return {"status": "error", "reason": f"Error getting status: {str(e)}"}
+
+
+def get_last_log_timestamp(pod_name, container_name=None):
+    """
+    Get the timestamp of the most recent log entry for a pod/container.
+    Returns ISO timestamp string or None if no logs available.
+    """
+    try:
+        # Get recent logs (last 10 lines) to find the most recent timestamp
+        log_response = v1.read_namespaced_pod_log(
+            name=pod_name, namespace=KUBE_NAMESPACE, container=container_name, tail_lines=10, timestamps=True
+        )
+
+        if not log_response:
+            return None
+
+        # Split into lines and find the last line with a timestamp
+        lines = log_response.strip().split("\n")
+        for line in reversed(lines):
+            if line.strip():
+                # Parse the timestamp from the log line
+                parsed = parse_log_line(line)
+                if parsed.get("timestamp"):
+                    return parsed["timestamp"]
+
+        return None
+
+    except Exception:
+        # If we can't get logs (permission issues, etc.), return None
+        return None
+
+
 def parse_log_line(line_str):
     """
     Parses a log line that typically starts with an RFC3339Nano timestamp.
@@ -203,8 +280,8 @@ def serve_index():
 def get_pods():
     """
     API endpoint to list pods in the configured Kubernetes namespace.
-    Returns a JSON object with the namespace, a list of pod names with their containers,
-    and the current pod name.
+    Returns a JSON object with the namespace, detailed pod information including
+    health status and last log timestamp, and the current pod name.
     """
     global KUBE_NAMESPACE, KUBE_POD_NAME
     app.logger.info(f"Request for /api/pods in namespace '{KUBE_NAMESPACE}'")
@@ -214,24 +291,74 @@ def get_pods():
     try:
         pod_list_response = v1.list_namespaced_pod(namespace=KUBE_NAMESPACE)
         pod_info = []
+
         for pod in pod_list_response.items:
             if exclude_self and pod.metadata.name == KUBE_POD_NAME:
                 continue
+
             pod_name = pod.metadata.name
             containers = [container.name for container in pod.spec.containers]
             init_containers = [container.name for container in (pod.spec.init_containers or [])]
 
-            # Add init containers with "init-" prefix to distinguish them
-            for init_container in init_containers:
-                pod_info.append(f"{pod_name}/init-{init_container}")
+            # Get pod health status
+            health_info = get_pod_health_status(pod)
 
-            # Add regular containers
+            # Get pod metadata
+            created_time = pod.metadata.creation_timestamp.isoformat() if pod.metadata.creation_timestamp else None
+
+            # Process init containers with "init-" prefix
+            for init_container in init_containers:
+                container_id = f"{pod_name}/init-{init_container}"
+                last_log_time = get_last_log_timestamp(pod_name, f"init-{init_container}")
+
+                pod_info.append(
+                    {
+                        "id": container_id,
+                        "pod_name": pod_name,
+                        "container_name": f"init-{init_container}",
+                        "type": "init_container",
+                        "health_status": health_info["status"],
+                        "health_reason": health_info["reason"],
+                        "last_log_time": last_log_time,
+                        "created_time": created_time,
+                    }
+                )
+
+            # Process regular containers
             if len(containers) == 1 and not init_containers:
-                pod_info.append(pod_name)
+                # Single container pod - use pod name only
+                last_log_time = get_last_log_timestamp(pod_name)
+
+                pod_info.append(
+                    {
+                        "id": pod_name,
+                        "pod_name": pod_name,
+                        "container_name": containers[0],
+                        "type": "pod",
+                        "health_status": health_info["status"],
+                        "health_reason": health_info["reason"],
+                        "last_log_time": last_log_time,
+                        "created_time": created_time,
+                    }
+                )
             else:
-                # For pods with multiple containers or any init containers, add each container as pod/container
+                # Multi-container pod - list each container separately
                 for container in containers:
-                    pod_info.append(f"{pod_name}/{container}")
+                    container_id = f"{pod_name}/{container}"
+                    last_log_time = get_last_log_timestamp(pod_name, container)
+
+                    pod_info.append(
+                        {
+                            "id": container_id,
+                            "pod_name": pod_name,
+                            "container_name": container,
+                            "type": "container",
+                            "health_status": health_info["status"],
+                            "health_reason": health_info["reason"],
+                            "last_log_time": last_log_time,
+                            "created_time": created_time,
+                        }
+                    )
 
         app.logger.info(f"Found {len(pod_info)} pod/container combinations in namespace '{KUBE_NAMESPACE}'")
         return jsonify(

@@ -446,12 +446,128 @@
                 }
             }
 
+            function formatTimestamp(timestamp) {
+                if (!timestamp) return '-';
+                try {
+                    const date = new Date(timestamp);
+                    const now = new Date();
+                    const diffMs = now - date;
+                    const diffMinutes = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMinutes / 60);
+                    const diffDays = Math.floor(diffHours / 24);
+                    
+                    if (diffMinutes < 1) {
+                        return 'Just now';
+                    } else if (diffMinutes < 60) {
+                        return `${diffMinutes}m ago`;
+                    } else if (diffHours < 24) {
+                        return `${diffHours}h ago`;
+                    } else if (diffDays < 7) {
+                        return `${diffDays}d ago`;
+                    } else {
+                        return date.toLocaleDateString();
+                    }
+                } catch (e) {
+                    return timestamp.substring(0, 16);
+                }
+            }
+
+            function getHealthStatusEmoji(status) {
+                const statusEmojis = {
+                    'healthy': '✅',
+                    'partial': '⚠️',
+                    'unhealthy': '❌',
+                    'pending': '⏳',
+                    'waiting': '⏸️',
+                    'terminated': '⏹️',
+                    'failed': '💥',
+                    'succeeded': '✅',
+                    'unknown': '❓',
+                    'error': '🚨'
+                };
+                return statusEmojis[status] || '❓';
+            }
+
+            function formatOptionText(podInfo, maxPodLength, maxContainerLength) {
+                const healthEmoji = getHealthStatusEmoji(podInfo.health_status);
+                const timeText = formatTimestamp(podInfo.last_log_time);
+                
+                // Split pod and container for separate columns
+                let podName, containerName;
+                if (podInfo.id.includes('/')) {
+                    const parts = podInfo.id.split('/');
+                    podName = parts[0];
+                    containerName = parts[1];
+                } else {
+                    podName = podInfo.id;
+                    containerName = podInfo.container_name;
+                }
+                
+                // Add type indicators
+                if (podInfo.type === 'init_container') {
+                    containerName = `${containerName} [INIT]`;
+                } else if (podInfo.type === 'pod' && containerName === podName) {
+                    containerName = '-'; // Single container pod
+                }
+                
+                // Pad both columns for alignment (use fixed width for emojis)
+                const paddedPod = podName.padEnd(maxPodLength);
+                const paddedContainer = containerName.padEnd(maxContainerLength);
+                
+                // Format: Pod | Container | Status | Last Log Time  
+                return `${paddedPod} | ${paddedContainer} | ${healthEmoji} | ${timeText}`;
+            }
+
+            function calculateMaxLengths(livePodsData, archivedPodsData, currentPodName) {
+                let maxPodLength = 8; // Minimum for "All Pods"
+                let maxContainerLength = 9; // Minimum for "Container"
+                
+                // Check live pods
+                if (livePodsData.pods && livePodsData.pods.length > 0) {
+                    livePodsData.pods.forEach(podInfo => {
+                        let podName, containerName;
+                        if (podInfo.id.includes('/')) {
+                            const parts = podInfo.id.split('/');
+                            podName = parts[0];
+                            containerName = parts[1];
+                        } else {
+                            podName = podInfo.id;
+                            containerName = podInfo.container_name;
+                        }
+                        
+                        // Add type indicators for container length calculation
+                        if (podInfo.type === 'init_container') {
+                            containerName = `${containerName} [INIT]`;
+                        } else if (podInfo.type === 'pod' && containerName === podName) {
+                            containerName = '-';
+                        }
+                        
+                        maxPodLength = Math.max(maxPodLength, podName.length);
+                        maxContainerLength = Math.max(maxContainerLength, containerName.length);
+                    });
+                }
+                
+                // Check current pod if not in live pods
+                if (currentPodName) {
+                    maxPodLength = Math.max(maxPodLength, currentPodName.length);
+                    maxContainerLength = Math.max(maxContainerLength, '-'.length);
+                }
+                
+                // Check archived pods
+                if (archivedPodsData.archived_pods && archivedPodsData.archived_pods.length > 0) {
+                    archivedPodsData.archived_pods.forEach(podName => {
+                        maxPodLength = Math.max(maxPodLength, podName.length);
+                        maxContainerLength = Math.max(maxContainerLength, '[ARCHIVED]'.length);
+                    });
+                }
+                
+                return { maxPodLength, maxContainerLength };
+            }
+
             async function fetchPods() {
                 try {
                     // Store current selection before refresh
                     const currentSelection = podSelector.value;
-                    const currentOption = podSelector.options[podSelector.selectedIndex];
-                    const isCurrentlyArchived = currentOption ? currentOption.dataset.isArchived === "true" : false;
 
                     // Fetch live pods with exclude_self parameter
                     const params = new URLSearchParams();
@@ -460,19 +576,30 @@
                     }
                     const livePodsData = await fetchFromServer(`/api/pods?${params.toString()}`);
                     namespaceValue.textContent = livePodsData.namespace || 'N/A';
-                    currentPodName = livePodsData.current_pod || null; // Store the current pod name
+                    currentPodName = livePodsData.current_pod || null;
 
                     // Fetch archived pods
-                    let archivedPodsData = { archived_pods: [] }; // Default empty
+                    let archivedPodsData = { archived_pods: [] };
                     try {
-                        // This endpoint might not be available or archival might be disabled
                         archivedPodsData = await fetchFromServer('/api/archived_pods');
                     } catch (error) {
                         console.warn("Could not fetch archived pods, possibly disabled:", error.message);
-                        // Do not display error for this, as it might be an expected state
                     }
 
-                    podSelector.innerHTML = '<option value="all">All Pods</option>';
+                    // Calculate maximum lengths for alignment
+                    const { maxPodLength, maxContainerLength } = calculateMaxLengths(livePodsData, archivedPodsData, currentPodName);
+                    
+                    // Create aligned header
+                    const headerPod = "Pod".padEnd(maxPodLength);
+                    const headerContainer = "Container".padEnd(maxContainerLength);
+                    
+                    // Reset selector with aligned header and "All Pods" option
+                    const allPodsPod = "All Pods".padEnd(maxPodLength);
+                    const allPodsContainer = "-".padEnd(maxContainerLength);
+                    podSelector.innerHTML = `
+                        <option value="" disabled style="font-weight: bold; color: #6b7280; background-color: #f9fafb;">── ${headerPod} | ${headerContainer} | Status | Last Log ──</option>
+                        <option value="all">${allPodsPod} | ${allPodsContainer} | 🌐 | -</option>
+                    `;
 
                     const createOption = (value, text, isArchived = false) => {
                         const option = document.createElement('option');
@@ -487,37 +614,60 @@
                     let hasLivePods = false;
                     if (livePodsData.pods && livePodsData.pods.length > 0) {
                         hasLivePods = true;
+                        
+                        // Create a live pods group
                         const liveGroup = document.createElement('optgroup');
                         liveGroup.label = "Live Pods";
 
-                        // Create a Set of all pods to ensure uniqueness
-                        const podSet = new Set(livePodsData.pods);
+                        // Create a Set to ensure uniqueness but now use detailed pod info
+                        const podMap = new Map();
+                        livePodsData.pods.forEach(podInfo => {
+                            podMap.set(podInfo.id, podInfo);
+                        });
 
-                        // If excludeSelf is unchecked and we have a current pod, add it to the set
-                        if (!excludeSelf.checked && currentPodName) {
-                            podSet.add(currentPodName);
+                        // If excludeSelf is unchecked and we have a current pod, ensure it's included
+                        if (!excludeSelf.checked && currentPodName && !podMap.has(currentPodName)) {
+                            // Add current pod with minimal info if not in the detailed list
+                            podMap.set(currentPodName, {
+                                id: currentPodName,
+                                health_status: 'unknown',
+                                last_log_time: null,
+                                type: 'pod'
+                            });
                         }
 
-                        // Convert Set back to array and sort
-                        const allPods = Array.from(podSet).sort();
-
-                        allPods.forEach(podName => {
-                            liveGroup.appendChild(createOption(podName, podName));
+                        // Sort pods by name and add to optgroup
+                        const sortedPods = Array.from(podMap.values()).sort((a, b) => a.id.localeCompare(b.id));
+                        
+                        sortedPods.forEach(podInfo => {
+                            const optionText = formatOptionText(podInfo, maxPodLength, maxContainerLength);
+                            const option = createOption(podInfo.id, optionText);
+                            // Store pod info for tooltip or future use
+                            option.dataset.healthStatus = podInfo.health_status;
+                            option.dataset.healthReason = podInfo.health_reason || '';
+                            option.dataset.lastLogTime = podInfo.last_log_time || '';
+                            option.title = `${podInfo.health_reason || 'No additional info'} | Created: ${podInfo.created_time ? new Date(podInfo.created_time).toLocaleString() : 'Unknown'}`;
+                            liveGroup.appendChild(option);
                         });
+                        
                         podSelector.appendChild(liveGroup);
                     } else if (!excludeSelf.checked && currentPodName) {
                         // If no pods from API but we have a current pod and excludeSelf is unchecked
                         hasLivePods = true;
                         const liveGroup = document.createElement('optgroup');
                         liveGroup.label = "Live Pods";
-                        liveGroup.appendChild(createOption(currentPodName, currentPodName));
+                        const paddedCurrentPod = currentPodName.padEnd(maxPodLength);
+                        const paddedCurrentContainer = "-".padEnd(maxContainerLength);
+                        const option = createOption(currentPodName, `${paddedCurrentPod} | ${paddedCurrentContainer} | ❓ | Unknown status`);
+                        option.title = "Current pod (limited info available)";
+                        liveGroup.appendChild(option);
                         podSelector.appendChild(liveGroup);
                     }
 
                     let hasArchivedPods = false;
                     if (archivedPodsData.archived_pods && archivedPodsData.archived_pods.length > 0) {
                         // Filter out archived pods that have matching live pods
-                        const livePodNames = new Set(livePodsData.pods || []);
+                        const livePodNames = new Set(livePodsData.pods?.map(p => p.id) || []);
                         const filteredArchivedPods = archivedPodsData.archived_pods.filter(
                             podName => !livePodNames.has(podName)
                         );
@@ -526,24 +676,32 @@
                             hasArchivedPods = true;
                             const archivedGroup = document.createElement('optgroup');
                             archivedGroup.label = "Previous Pods";
-                            filteredArchivedPods.forEach(podName => {
-                                archivedGroup.appendChild(createOption(podName, podName, true));
+                            filteredArchivedPods.sort().forEach(podName => {
+                                const paddedArchivedPod = podName.padEnd(maxPodLength);
+                                const paddedArchivedContainer = "[ARCHIVED]".padEnd(maxContainerLength);
+                                const option = createOption(podName, `${paddedArchivedPod} | ${paddedArchivedContainer} | 📁 | -`, true);
+                                option.title = "Archived pod logs";
+                                archivedGroup.appendChild(option);
                             });
                             podSelector.appendChild(archivedGroup);
                         }
                     }
 
                     if (!hasLivePods && !hasArchivedPods) {
-                        podSelector.innerHTML = '<option value="all">No pods or previous pods found</option>';
+                        const headerPod = "Pod".padEnd(maxPodLength);
+                        const headerContainer = "Container".padEnd(maxContainerLength);
+                        const noPodsText = "No pods found".padEnd(maxPodLength);
+                        const noPodsContainer = "-".padEnd(maxContainerLength);
+                        podSelector.innerHTML = `
+                            <option value="" disabled style="font-weight: bold; color: #6b7280; background-color: #f9fafb;">── ${headerPod} | ${headerContainer} | Status | Last Log ──</option>
+                            <option value="all">${noPodsText} | ${noPodsContainer} | ❌ | -</option>
+                        `;
                     }
 
                     // Try to restore previous selection
                     if (currentSelection) {
                         // Check if the previously selected pod still exists
-                        const optionExists = Array.from(podSelector.options).some(option =>
-                            option.value === currentSelection ||
-                            (isCurrentlyArchived && option.value === `archived:${currentSelection}`)
-                        );
+                        const optionExists = Array.from(podSelector.options).some(option => option.value === currentSelection);
 
                         if (optionExists) {
                             podSelector.value = currentSelection;
@@ -562,7 +720,18 @@
                     // This catch is mainly for errors from /api/pods now
                     namespaceValue.textContent = 'Error loading';
                     errorDisplay.textContent = `Error fetching pod list: ${error.message}`;
-                    podSelector.innerHTML = '<option value="all">Error loading pods</option>';
+                    
+                    // Use default padding for error case
+                    const defaultMaxPodLength = 15;
+                    const defaultMaxContainerLength = 10;
+                    const headerPod = "Pod".padEnd(defaultMaxPodLength);
+                    const headerContainer = "Container".padEnd(defaultMaxContainerLength);
+                    const errorText = "Error loading".padEnd(defaultMaxPodLength);
+                    const errorContainer = "-".padEnd(defaultMaxContainerLength);
+                    podSelector.innerHTML = `
+                        <option value="" disabled style="font-weight: bold; color: #6b7280; background-color: #f9fafb;">── ${headerPod} | ${headerContainer} | Status | Last Log ──</option>
+                        <option value="all">${errorText} | ${errorContainer} | ❌ | -</option>
+                    `;
                 }
             }
 
