@@ -312,6 +312,9 @@
             const downloadCurrentLog = document.getElementById('downloadCurrentLog');
             const downloadPodLogs = document.getElementById('downloadPodLogs');
             const downloadAllLogs = document.getElementById('downloadAllLogs');
+            const logsToggle = document.getElementById('logsToggle');
+            const eventsToggle = document.getElementById('eventsToggle');
+            const selectorLabel = document.getElementById('selectorLabel');
 
             let currentLogs = [];
             let currentEvents = [];
@@ -1714,8 +1717,9 @@
             podSelector.addEventListener('change', () => {
                 logOutput.textContent = '';
                 currentLogs = [];
+                currentEvents = [];
                 updateDownloadButtonStates();
-                fetchAndDisplayLogs();
+                fetchAndDisplayData();
             });
 
             sortOrder.addEventListener('change', fetchAndDisplayData);
@@ -1894,9 +1898,13 @@
             }
 
             // Initial data fetch
+<<<<<<< HEAD
             fetchPods().then(() => {
                 updateDownloadButtonStates();
             });
+=======
+            fetchUnifiedSources();
+>>>>>>> 931d35b (add event viewer)
             fetchVersion();
         });
     </script>

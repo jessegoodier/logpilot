@@ -1677,6 +1677,286 @@ def download_all_logs():
         return jsonify({"message": f"Error creating log archive: {str(e)}"}), 500
 
 
+# --- Events API Endpoints ---
+@retry_k8s_operation(max_retries=2, initial_delay=0.3)
+def _fetch_events_with_retry(namespace=None):
+    """Helper function to fetch events with retry logic."""
+    if namespace:
+        return v1.list_namespaced_event(namespace=namespace, watch=False, limit=500)
+    else:
+        return v1.list_event_for_all_namespaces(watch=False, limit=1000)
+
+
+def fetch_events(namespace: Optional[str] = None) -> List[KubernetesEvent]:
+    """Fetch Kubernetes events for the given namespace."""
+    try:
+        events_list_response = _fetch_events_with_retry(namespace)
+        return [KubernetesEvent.from_v1_event(event) for event in events_list_response.items]
+    except ApiException as e:
+        app.logger.error(f"Error fetching events (Kubernetes API): {e.status} - {e.reason}")
+        raise
+    except Exception as e:
+        app.logger.error(f"Unexpected error fetching events: {e}")
+        raise
+
+
+def filter_events(
+    events: List[KubernetesEvent],
+    kind_filter: Optional[str] = None,
+    type_filter: Optional[str] = None,
+    reason_filter: Optional[str] = None,
+    search_string: Optional[str] = None,
+    case_sensitive: bool = False,
+) -> List[KubernetesEvent]:
+    """Filter events based on various criteria."""
+    filtered_events = events
+
+    if kind_filter:
+        filtered_events = [
+            e
+            for e in filtered_events
+            if e.involved_object_kind and kind_filter.lower() in e.involved_object_kind.lower()
+        ]
+
+    if type_filter:
+        filtered_events = [e for e in filtered_events if e.type and type_filter.lower() in e.type.lower()]
+
+    if reason_filter:
+        filtered_events = [e for e in filtered_events if e.reason and reason_filter.lower() in e.reason.lower()]
+
+    if search_string:
+
+        def event_matches_search(event: KubernetesEvent) -> bool:
+            searchable_text = " ".join(
+                filter(None, [event.message, event.reason, event.involved_object_name, event.involved_object_kind])
+            )
+
+            if case_sensitive:
+                return search_string in searchable_text
+            else:
+                return search_string.lower() in searchable_text.lower()
+
+        filtered_events = [e for e in filtered_events if event_matches_search(e)]
+
+    return filtered_events
+
+
+@app.route("/api/events", methods=["GET"])
+@require_api_key
+def get_events():
+    """
+    API endpoint to fetch Kubernetes events.
+    Query Parameters:
+        - namespace (optional): Specific namespace, defaults to current namespace
+        - object_name (optional): Filter by involved object name
+        - object_kind (optional): Filter by involved object kind (Pod, Deployment, etc.)
+        - event_type (optional): Filter by event type (Normal, Warning)
+        - reason (optional): Filter by event reason
+        - search_string (optional): Search in event messages and other fields
+        - case_sensitive (optional, default 'false'): Case sensitive search
+        - sort_order (optional, default 'desc'): 'asc' (oldest first) or 'desc' (newest first)
+        - limit (optional, default '100'): Maximum number of events to return
+    """
+    global KUBE_NAMESPACE
+
+    # Get query parameters
+    namespace = request.args.get("namespace", KUBE_NAMESPACE)
+    object_name = request.args.get("object_name", "").strip()
+    object_kind = request.args.get("object_kind", "").strip()
+    event_type = request.args.get("event_type", "").strip()
+    reason = request.args.get("reason", "").strip()
+    search_string = request.args.get("search_string", "").strip()
+    case_sensitive = request.args.get("case_sensitive", "false").lower() == "true"
+    sort_order = request.args.get("sort_order", "desc").lower()
+    limit_str = request.args.get("limit", "100")
+
+    app.logger.info(
+        f"Request for /api/events: namespace='{namespace}', object_name='{object_name}', "
+        f"object_kind='{object_kind}', event_type='{event_type}', reason='{reason}', "
+        f"search='{search_string}', sort='{sort_order}', limit='{limit_str}'"
+    )
+
+    try:
+        limit = int(limit_str) if limit_str != "0" else None
+        if limit is not None and limit < 0:
+            return jsonify({"message": "limit must be non-negative or 0."}), 400
+    except ValueError:
+        return jsonify({"message": "Invalid number for limit."}), 400
+
+    try:
+        # Fetch events
+        events = fetch_events(namespace)
+
+        # Filter events
+        filtered_events = filter_events(
+            events,
+            kind_filter=object_kind if object_kind else None,
+            type_filter=event_type if event_type else None,
+            reason_filter=reason if reason else None,
+            search_string=search_string if search_string else None,
+            case_sensitive=case_sensitive,
+        )
+
+        # Additional object name filter
+        if object_name:
+            filtered_events = [
+                e
+                for e in filtered_events
+                if e.involved_object_name and (object_name.lower() in e.involved_object_name.lower())
+            ]
+
+        # Sort by timestamp
+        def get_sort_timestamp(event: KubernetesEvent) -> datetime:
+            timestamp = event.last_timestamp or event.first_timestamp
+            if timestamp is None:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            if timestamp.tzinfo is None:
+                return timestamp.replace(tzinfo=timezone.utc)
+            return timestamp
+
+        filtered_events.sort(key=get_sort_timestamp, reverse=(sort_order == "desc"))
+
+        # Apply limit
+        if limit is not None and limit > 0:
+            if sort_order == "desc":
+                filtered_events = filtered_events[:limit]
+            else:
+                filtered_events = filtered_events[-limit:]
+
+        # Convert to dict format for JSON response
+        events_data = [event.to_dict() for event in filtered_events]
+
+        return jsonify({"events": events_data, "namespace": namespace, "total_count": len(events_data)})
+
+    except ApiException as e:
+        app.logger.error(f"Kubernetes API error fetching events: {e.status} - {e.reason} - {e.body}")
+        error_message, status_code = format_k8s_error(e)
+        return jsonify(
+            {
+                "message": error_message,
+                "error_type": "kubernetes_api_error",
+                "retry_suggested": status_code >= 500 or status_code == 429,
+            }
+        ), status_code
+    except Exception as e:
+        app.logger.error(f"Unexpected error fetching events: {str(e)}", exc_info=True)
+        return jsonify(
+            {
+                "message": "An unexpected error occurred while fetching events",
+                "error_type": "internal_error",
+                "retry_suggested": False,
+            }
+        ), 500
+
+
+@app.route("/api/event_sources", methods=["GET"])
+@require_api_key
+def get_event_sources():
+    """
+    API endpoint to get available event sources (objects that have events).
+    Similar to /api/pods but for events.
+    Returns unique combinations of object kinds and names that have events.
+    """
+    global KUBE_NAMESPACE
+
+    namespace = request.args.get("namespace", KUBE_NAMESPACE)
+
+    try:
+        app.logger.info(f"Fetching events for namespace: {namespace}")
+        events = fetch_events(namespace)
+        app.logger.info(f"Retrieved {len(events)} events")
+
+        # Create unique sources from events
+        sources = {}  # key: "kind/name", value: {kind, name, event_count, latest_timestamp, latest_type}
+
+        for event in events:
+            try:
+                if not event.involved_object_kind or not event.involved_object_name:
+                    continue
+
+                key = f"{event.involved_object_kind}/{event.involved_object_name}"
+
+                if key not in sources:
+                    sources[key] = {
+                        "id": key,
+                        "object_kind": event.involved_object_kind,
+                        "object_name": event.involved_object_name,
+                        "event_count": 0,
+                        "latest_timestamp": None,
+                        "latest_event_type": None,
+                        "namespace": event.namespace,
+                    }
+
+                sources[key]["event_count"] += 1
+
+                # Update latest timestamp
+                event_timestamp = event.last_timestamp or event.first_timestamp
+                if event_timestamp:
+                    # Convert to datetime for comparison if latest_timestamp is a string
+                    latest_ts = sources[key]["latest_timestamp"]
+                    if latest_ts is None:
+                        should_update = True
+                    elif isinstance(latest_ts, str):
+                        # Convert ISO string back to datetime for comparison
+                        try:
+                            # Handle different ISO format variations
+                            if latest_ts.endswith('Z'):
+                                latest_ts_clean = latest_ts.replace('Z', '+00:00')
+                            elif '+' in latest_ts or latest_ts.endswith('UTC'):
+                                latest_ts_clean = latest_ts
+                            else:
+                                latest_ts_clean = latest_ts + '+00:00'
+
+                            latest_dt = datetime.fromisoformat(latest_ts_clean)
+
+                            # Ensure both timestamps are timezone-aware for comparison
+                            if event_timestamp.tzinfo is None:
+                                event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
+                            if latest_dt.tzinfo is None:
+                                latest_dt = latest_dt.replace(tzinfo=timezone.utc)
+
+                            should_update = event_timestamp > latest_dt
+                        except (ValueError, AttributeError) as e:
+                            app.logger.debug(f"Error parsing timestamp {latest_ts}: {e}")
+                            should_update = True
+                    else:
+                        should_update = event_timestamp > latest_ts
+
+                    if should_update:
+                        sources[key]["latest_timestamp"] = event_timestamp.isoformat()
+                        sources[key]["latest_event_type"] = event.type
+            except Exception as e:
+                app.logger.warning(f"Error processing event for object {event.involved_object_kind}/{event.involved_object_name}: {e}")
+                continue
+
+        # Convert to list and sort by latest timestamp
+        sources_list = list(sources.values())
+        sources_list.sort(key=lambda x: x["latest_timestamp"] or "0000-00-00T00:00:00Z", reverse=True)
+
+        app.logger.info(f"Processed {len(sources_list)} unique event sources")
+        return jsonify({"sources": sources_list, "namespace": namespace})
+
+    except ApiException as e:
+        app.logger.error(f"Kubernetes API error fetching event sources: {e.status} - {e.reason}")
+        error_message, status_code = format_k8s_error(e)
+        return jsonify(
+            {
+                "message": error_message,
+                "error_type": "kubernetes_api_error",
+                "retry_suggested": status_code >= 500 or status_code == 429,
+            }
+        ), status_code
+    except Exception as e:
+        app.logger.error(f"Unexpected error fetching event sources: {str(e)}", exc_info=True)
+        return jsonify(
+            {
+                "message": "An unexpected error occurred while fetching event sources",
+                "error_type": "internal_error",
+                "retry_suggested": False,
+            }
+        ), 500
+
+
 # --- Main Execution ---
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=False)
