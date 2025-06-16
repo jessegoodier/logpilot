@@ -22,9 +22,17 @@ class TestANSIRendering:
 
         # Check that ANSI color classes exist in the document
         ansi_colors = [
-            "ansi-red", "ansi-green", "ansi-blue", "ansi-yellow",
-            "ansi-magenta", "ansi-cyan", "ansi-white", "ansi-black",
-            "ansi-bright-red", "ansi-bright-green", "ansi-bright-blue"
+            "ansi-red",
+            "ansi-green",
+            "ansi-blue",
+            "ansi-yellow",
+            "ansi-magenta",
+            "ansi-cyan",
+            "ansi-white",
+            "ansi-black",
+            "ansi-bright-red",
+            "ansi-bright-green",
+            "ansi-bright-blue",
         ]
 
         for color_class in ansi_colors:
@@ -47,7 +55,7 @@ class TestANSIRendering:
 
         # Check for error-related CSS classes
         error_classes = ["log-error", "retry-button"]
-        
+
         for error_class in error_classes:
             class_exists = page.evaluate(f"""
                 () => {{
@@ -110,10 +118,7 @@ class TestErrorDisplay:
         expect(pod_selector).to_be_visible(timeout=NAV_TIMEOUT)
 
         # Wait for pods to be populated
-        page.wait_for_function(
-            "document.querySelector('#podSelector').options.length > 1",
-            timeout=NAV_TIMEOUT
-        )
+        page.wait_for_function("document.querySelector('#podSelector').options.length > 1", timeout=NAV_TIMEOUT)
 
         # Select a pod to trigger log loading (which will now error)
         pod_options = pod_selector.locator("option")
@@ -125,13 +130,13 @@ class TestErrorDisplay:
 
                 # Wait for the error to be displayed
                 log_output = page.locator("#logOutput")
-                
+
                 # Check if error is displayed with proper styling
                 error_elements = log_output.locator(".log-error")
                 if error_elements.count() > 0:
                     # Error should be visible and styled
                     expect(error_elements.first).to_be_visible()
-                    
+
                     # Check for retry button if suggested
                     retry_buttons = error_elements.locator(".retry-button")
                     if retry_buttons.count() > 0:
@@ -166,7 +171,7 @@ class TestErrorDisplay:
         log_output = page.locator("#logOutput")
         error_elements = log_output.locator(".log-error")
         expect(error_elements).to_have_count(1)
-        
+
         # Should not have retry button
         retry_buttons = error_elements.locator(".retry-button")
         expect(retry_buttons).to_have_count(0)
@@ -191,7 +196,7 @@ class TestErrorDisplay:
         # Switch to light theme
         if light_theme_radio.is_visible():
             light_theme_radio.click()
-            
+
             # Check that body doesn't have dark class
             body_classes = page.evaluate("document.body.className")
             assert "dark" not in body_classes
@@ -199,7 +204,7 @@ class TestErrorDisplay:
         # Switch to dark theme
         if dark_theme_radio.is_visible():
             dark_theme_radio.click()
-            
+
             # Check that body has dark class
             body_classes = page.evaluate("document.body.className")
             assert "dark" in body_classes
@@ -244,7 +249,7 @@ class TestInteractiveFeatures:
         retry_button = page.locator(".retry-button")
         expect(retry_button).to_be_visible()
         expect(retry_button).to_be_enabled()
-        
+
         retry_button.click()
 
         # Verify that click was registered
@@ -317,7 +322,7 @@ class TestInteractiveFeatures:
         # Check that ANSI classes are applied
         red_text = log_output.locator(".ansi-red")
         green_text = log_output.locator(".ansi-green")
-        
+
         expect(red_text).to_be_visible()
         expect(green_text).to_be_visible()
         expect(red_text).to_have_text("ERROR")

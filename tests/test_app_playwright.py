@@ -434,10 +434,7 @@ def test_error_handling_and_retry_functionality(page: Page):
 
         # Wait for pods to load normally first
         try:
-            page.wait_for_function(
-                "document.querySelector('#podSelector').options.length > 1",
-                timeout=NAV_TIMEOUT
-            )
+            page.wait_for_function("document.querySelector('#podSelector').options.length > 1", timeout=NAV_TIMEOUT)
         except:
             print("No pods available for error testing - skipping error simulation tests")
             return
@@ -445,57 +442,55 @@ def test_error_handling_and_retry_functionality(page: Page):
         # Test 1: Error with retry suggestion
         print("Testing error with retry suggestion...")
         page.evaluate("window.simulateAPIError('retry')")
-        
+
         # Select a pod to trigger log fetching
         pod_options = pod_selector.locator("option")
         if pod_options.count() > 1:
             first_pod_value = pod_options.nth(1).get_attribute("value")
             if first_pod_value:
                 pod_selector.select_option(first_pod_value)
-                
+
                 # Wait for loading to complete
                 loading_indicator = page.locator("#loadingIndicator")
                 try:
                     expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
                 except:
                     print("Loading indicator timeout - continuing with test")
-                
+
                 # Check for error display in logs
                 log_output = page.locator("#logOutput")
-                
+
                 # Look for error entries in the log display
                 # The error might be displayed as a log entry or in the error display area
                 error_display = page.locator("#errorDisplay")
-                
+
                 # Check if error is shown in either location
                 try:
                     error_display_text = error_display.text_content() or ""
                     log_output_text = log_output.text_content() or ""
                     error_elements = log_output.locator(".log-error")
-                    
+
                     error_shown = (
-                        error_display_text.strip() or
-                        error_elements.count() > 0 or
-                        "error" in log_output_text.lower()
+                        error_display_text.strip() or error_elements.count() > 0 or "error" in log_output_text.lower()
                     )
                 except Exception as e:
                     print(f"Error checking failed: {e}")
                     error_shown = False
-                
+
                 if error_shown:
                     print("Error successfully displayed")
-                    
+
                     # Look for retry button if present
                     retry_buttons = log_output.locator(".retry-button")
                     if retry_buttons.count() > 0:
                         print("Retry button found and is clickable")
                         try:
                             expect(retry_buttons.first).to_be_visible(timeout=3000)
-                            
+
                             # Test retry button functionality
                             page.evaluate("window.restoreOriginalFetch()")  # Restore normal fetch
                             retry_buttons.first.click()
-                            
+
                             # Wait for retry to complete
                             try:
                                 expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
@@ -511,7 +506,7 @@ def test_error_handling_and_retry_functionality(page: Page):
         try:
             print("Testing error without retry suggestion...")
             page.evaluate("window.simulateAPIError('no_retry')")
-            
+
             # Trigger another log fetch
             if pod_options.count() > 1:
                 # Select a different pod or re-select the same one
@@ -520,21 +515,21 @@ def test_error_handling_and_retry_functionality(page: Page):
                     expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
                 except:
                     print("Loading timeout for no-retry test - continuing")
-                
+
                 # Check that error is displayed but without retry button
                 error_display = page.locator("#errorDisplay")
                 log_output = page.locator("#logOutput")
-                
+
                 try:
                     error_display_text = error_display.text_content() or ""
                     log_output_text = log_output.text_content() or ""
-                    
+
                     error_shown = (
-                        error_display_text.strip() or
-                        log_output.locator(".log-error").count() > 0 or
-                        "error" in log_output_text.lower()
+                        error_display_text.strip()
+                        or log_output.locator(".log-error").count() > 0
+                        or "error" in log_output_text.lower()
                     )
-                    
+
                     if error_shown:
                         print("Error without retry displayed correctly")
                     else:
@@ -546,7 +541,7 @@ def test_error_handling_and_retry_functionality(page: Page):
 
         # Restore normal functionality
         page.evaluate("window.restoreOriginalFetch()")
-        
+
         # Test 3: Verify normal operation after error recovery
         print("Testing normal operation after error recovery...")
         try:
@@ -554,7 +549,7 @@ def test_error_handling_and_retry_functionality(page: Page):
             expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
         except:
             print("Recovery test timeout - continuing")
-        
+
         # Should now work normally (optional verification)
         try:
             page.wait_for_function(
@@ -576,7 +571,7 @@ def test_error_handling_and_retry_functionality(page: Page):
     except Exception as e:
         # Restore normal fetch in case of test failure
         page.evaluate("window.restoreOriginalFetch && window.restoreOriginalFetch()")
-        
+
         screenshot_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
             "test-results",
@@ -633,11 +628,11 @@ def test_ansi_css_and_styling_loaded(page: Page):
         """)
 
         print(f"ANSI classes found: {ansi_classes_loaded['found']}")
-        if ansi_classes_loaded['missing']:
+        if ansi_classes_loaded["missing"]:
             print(f"Missing classes: {ansi_classes_loaded['missing']}")
 
         # We should find at least some essential classes
-        assert len(ansi_classes_loaded['found']) >= 3, "Not enough ANSI CSS classes found"
+        assert len(ansi_classes_loaded["found"]) >= 3, "Not enough ANSI CSS classes found"
 
         # Test theme switching affects styling (optional - skip if settings not available)
         settings_button = page.locator("#settingsButton")
@@ -645,7 +640,7 @@ def test_ansi_css_and_styling_loaded(page: Page):
             # Wait for settings button to be visible and clickable
             expect(settings_button).to_be_visible(timeout=5000)
             expect(settings_button).to_be_enabled(timeout=5000)
-            
+
             settings_button.click()
             settings_menu = page.locator("#settingsMenu")
             expect(settings_menu).to_be_visible(timeout=ACTION_TIMEOUT)
@@ -654,7 +649,7 @@ def test_ansi_css_and_styling_loaded(page: Page):
             dark_theme_radio = page.locator("#themeDark")
             if dark_theme_radio.is_visible():
                 dark_theme_radio.click()
-                
+
                 # Check that dark class is applied to body
                 body_has_dark = page.evaluate("document.body.classList.contains('dark')")
                 if body_has_dark:
@@ -664,7 +659,7 @@ def test_ansi_css_and_styling_loaded(page: Page):
             light_theme_radio = page.locator("#themeLight")
             if light_theme_radio.is_visible():
                 light_theme_radio.click()
-                
+
                 # Check that dark class is removed from body
                 body_has_dark = page.evaluate("document.body.classList.contains('dark')")
                 if not body_has_dark:
@@ -676,7 +671,7 @@ def test_ansi_css_and_styling_loaded(page: Page):
             except:
                 # If clicking settings button fails, click elsewhere to close menu
                 page.click("body", timeout=2000)
-                
+
         except Exception as e:
             print(f"Theme switching test skipped - settings not accessible: {e}")
             # This is not a critical failure for ANSI CSS testing
