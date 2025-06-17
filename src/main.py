@@ -22,7 +22,7 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
 # --- Version Configuration ---
-__version__ = "0.6.1"
+__version__ = "0.7.0"
 
 # --- Log Archiver Imports ---
 from log_archiver import get_log_dir_stats, start_log_cleanup_job, watch_pods_and_archive
