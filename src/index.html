@@ -239,6 +239,19 @@
 
             <!-- Download Controls -->
             <div class="flex flex-wrap gap-2 mt-3">
+                <button id="downloadCurrentLog" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Download current log for selected pod">
+                    Download Current Log
+                </button>
+                <button id="downloadArchivedLog" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Download archived log for selected pod">
+                    Download Archived Log
+                </button>
+                <button id="downloadAllLogs" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Download all archived logs as ZIP">
+                    Download All Logs (ZIP)
+                </button>
+            </div>
+
+            <!-- Download Controls -->
+            <div class="flex flex-wrap gap-2 mt-3">
                 <button id="downloadCurrentLog" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Download log for selected container">
                     Download Current Log
                 </button>
@@ -1714,6 +1727,7 @@
             podSelector.addEventListener('change', () => {
                 logOutput.textContent = '';
                 currentLogs = [];
+                updateDownloadButtonStates();
                 fetchAndDisplayLogs();
             });
             sortOrder.addEventListener('change', fetchAndDisplayData);
@@ -1846,7 +1860,7 @@
                     const selectedOption = podSelector.options[podSelector.selectedIndex];
                     const isArchivedLog = selectedOption.dataset.isArchived === "true";
                     const actualPodName = isArchivedLog ? selectedValue.substring("archived:".length) : selectedValue;
-                    
+
                     // Extract just the pod name (remove container part if present)
                     const podName = actualPodName.includes('/') ? actualPodName.split('/')[0] : actualPodName;
 
@@ -1892,7 +1906,9 @@
             }
 
             // Initial data fetch
-            fetchPods();
+            fetchPods().then(() => {
+                updateDownloadButtonStates();
+            });
             fetchVersion();
         });
     </script>

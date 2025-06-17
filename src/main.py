@@ -3,7 +3,9 @@ import logging
 import os
 import re
 import tempfile
+import tempfile
 import time
+import zipfile
 import zipfile
 from functools import wraps
 from html import escape
@@ -14,6 +16,7 @@ from flask import (
     redirect,
     render_template_string,
     request,
+    send_file,
     send_file,
     send_from_directory,
     session,
@@ -28,6 +31,7 @@ from typing import Any, Dict, List, Optional
 __version__ = "0.6.1"
 
 # --- Log Archiver Imports ---
+from log_archiver import get_log_dir_stats, start_log_cleanup_job, watch_pods_and_archive
 from log_archiver import get_log_dir_stats, start_log_cleanup_job, watch_pods_and_archive
 
 # --- Flask App Setup ---
@@ -1445,22 +1449,22 @@ def get_event_sources():
                                 latest_ts_clean = latest_ts
                             else:
                                 latest_ts_clean = latest_ts + '+00:00'
-                            
+
                             latest_dt = datetime.fromisoformat(latest_ts_clean)
-                            
+
                             # Ensure both timestamps are timezone-aware for comparison
                             if event_timestamp.tzinfo is None:
                                 event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
                             if latest_dt.tzinfo is None:
                                 latest_dt = latest_dt.replace(tzinfo=timezone.utc)
-                                
+
                             should_update = event_timestamp > latest_dt
                         except (ValueError, AttributeError) as e:
                             app.logger.debug(f"Error parsing timestamp {latest_ts}: {e}")
                             should_update = True
                     else:
                         should_update = event_timestamp > latest_ts
-                    
+
                     if should_update:
                         sources[key]["latest_timestamp"] = event_timestamp.isoformat()
                         sources[key]["latest_event_type"] = event.type
@@ -1471,7 +1475,7 @@ def get_event_sources():
         # Convert to list and sort by latest timestamp
         sources_list = list(sources.values())
         sources_list.sort(key=lambda x: x["latest_timestamp"] or "0000-00-00T00:00:00Z", reverse=True)
-        
+
         app.logger.info(f"Processed {len(sources_list)} unique event sources")
         return jsonify({"sources": sources_list, "namespace": namespace})
 
