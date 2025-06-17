@@ -119,11 +119,8 @@ def archive_pod_logs(v1, namespace, pod_name, log_dir):
             container_name = init_container.name
             log_data = get_pod_logs(v1, namespace, pod_name, container_name)
             if log_data:
-                # Use "init-" prefix for init containers to distinguish them
-                if len(containers) + len(init_containers) > 1:
-                    filename = f"{pod_name}/init-{container_name}.log"
-                else:
-                    filename = f"{pod_name}.log"
+                # Always use pod/container format with "init-" prefix for init containers
+                filename = f"{pod_name}/init-{container_name}.log"
 
                 log_path = os.path.join(log_dir, filename)
                 os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -137,11 +134,8 @@ def archive_pod_logs(v1, namespace, pod_name, log_dir):
             container_name = container.name
             log_data = get_pod_logs(v1, namespace, pod_name, container_name)
             if log_data:
-                # Create filename based on whether there are multiple containers or init containers
-                if len(containers) + len(init_containers) > 1:
-                    filename = f"{pod_name}/{container_name}.log"
-                else:
-                    filename = f"{pod_name}.log"
+                # Always use pod/container format
+                filename = f"{pod_name}/{container_name}.log"
 
                 log_path = os.path.join(log_dir, filename)
                 os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -248,20 +242,16 @@ def purge_previous_pod_logs(log_dir, logger):
             for init_container in init_containers:
                 current_pod_containers.add(f"{pod_name}/init-{init_container}")
 
-            # Add regular containers
-            if len(containers) == 1 and not init_containers:
-                current_pod_containers.add(pod_name)
-            else:
-                # For pods with multiple containers or any init containers, add each container as pod/container
-                for container in containers:
-                    current_pod_containers.add(f"{pod_name}/{container}")
+            # Add regular containers (always use pod/container format)
+            for container in containers:
+                current_pod_containers.add(f"{pod_name}/{container}")
 
     except Exception as e:
         logger.error(f"Error getting current pod list: {e}")
         return 0, 1
 
     # Use os.walk to search subdirectories since multi-container pods create subdirectories
-    for root, dirs, files in os.walk(log_dir):
+    for root, _, files in os.walk(log_dir):
         for filename in files:
             if filename.endswith(".log"):  # Process only .log files
                 file_path = os.path.join(root, filename)
