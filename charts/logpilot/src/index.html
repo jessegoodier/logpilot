@@ -1714,9 +1714,10 @@
             podSelector.addEventListener('change', () => {
                 logOutput.textContent = '';
                 currentLogs = [];
+                updateDownloadButtonStates();
                 fetchAndDisplayLogs();
             });
-            
+
             sortOrder.addEventListener('change', fetchAndDisplayData);
             numLines.addEventListener('change', fetchAndDisplayData);
             timestampType.addEventListener('change', () => {
@@ -1847,7 +1848,7 @@
                     const selectedOption = podSelector.options[podSelector.selectedIndex];
                     const isArchivedLog = selectedOption.dataset.isArchived === "true";
                     const actualPodName = isArchivedLog ? selectedValue.substring("archived:".length) : selectedValue;
-                    
+
                     // Extract just the pod name (remove container part if present)
                     const podName = actualPodName.includes('/') ? actualPodName.split('/')[0] : actualPodName;
 
@@ -1893,7 +1894,9 @@
             }
 
             // Initial data fetch
-            fetchPods();
+            fetchPods().then(() => {
+                updateDownloadButtonStates();
+            });
             fetchVersion();
         });
     </script>
