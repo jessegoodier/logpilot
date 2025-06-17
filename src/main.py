@@ -1569,6 +1569,65 @@ def download_log():
         return jsonify({"message": f"Error downloading log: {str(e)}"}), 500
 
 
+@app.route("/api/download_pod_logs", methods=["GET"])
+@require_api_key
+def download_pod_logs():
+    """
+    API endpoint to download all logs for a specific pod as a zip file.
+    Query Parameters:
+        - pod_name (required): The name of the pod.
+    """
+    global LOG_DIR, RETAIN_ALL_POD_LOGS
+
+    pod_name = request.args.get("pod_name")
+
+    if not pod_name:
+        return jsonify({"message": "Pod name is required"}), 400
+
+    if not RETAIN_ALL_POD_LOGS:
+        return jsonify({"message": "Archived logs are not enabled"}), 403
+
+    if not os.path.exists(LOG_DIR):
+        return jsonify({"message": "Log directory does not exist"}), 404
+
+    try:
+        # Create a temporary zip file
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip:
+            temp_zip_path = temp_zip.name
+
+        # Create the zip file
+        with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            # Walk through the log directory and add all .log files for the specific pod
+            for root, _, files in os.walk(LOG_DIR):
+                for filename in files:
+                    if filename.endswith(".log"):
+                        file_path = os.path.join(root, filename)
+                        # Get relative path from LOG_DIR
+                        relative_path = os.path.relpath(file_path, LOG_DIR)
+
+                        # Check if this file belongs to the specified pod
+                        # Files are either "pod/container.log" or "pod.log"
+                        if relative_path.startswith(f"{pod_name}/") or relative_path == f"{pod_name}.log":
+                            zipf.write(file_path, relative_path)
+
+        # Check if any files were added to the zip
+        with zipfile.ZipFile(temp_zip_path, "r") as zipf:
+            if len(zipf.namelist()) == 0:
+                os.unlink(temp_zip_path)
+                return jsonify({"message": f"No logs found for pod {pod_name}"}), 404
+
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"logpilot_{pod_name}_logs_{timestamp}.zip"
+
+        return send_file(temp_zip_path, as_attachment=True, download_name=filename, mimetype="application/zip")
+
+    except Exception as e:
+        app.logger.error(f"Error creating pod log archive for {pod_name}: {str(e)}", exc_info=True)
+        return jsonify({"message": f"Error creating pod log archive: {str(e)}"}), 500
+
+
 @app.route("/api/download_all_logs", methods=["GET"])
 @require_api_key
 def download_all_logs():

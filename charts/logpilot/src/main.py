@@ -2,7 +2,9 @@ import json
 import logging
 import os
 import re
+import tempfile
 import time
+import zipfile
 from functools import wraps
 from html import escape
 
@@ -12,6 +14,7 @@ from flask import (
     redirect,
     render_template_string,
     request,
+    send_file,
     send_from_directory,
     session,
 )
@@ -25,7 +28,7 @@ from typing import Any, Dict, List, Optional
 __version__ = "0.6.1"
 
 # --- Log Archiver Imports ---
-from log_archiver import start_log_cleanup_job, watch_pods_and_archive
+from log_archiver import get_log_dir_stats, start_log_cleanup_job, watch_pods_and_archive
 
 # --- Flask App Setup ---
 app = Flask(__name__, static_folder=".", static_url_path="")  # Serve static files from current dir
@@ -1072,7 +1075,7 @@ def get_archived_logs():
 
 @app.route("/api/logDirStats", methods=["GET"])
 @require_api_key
-def get_log_dir_stats():
+def get_log_dir_stats_endpoint():
     """
     API endpoint to get statistics about the log directory.
     Returns:
@@ -1282,8 +1285,9 @@ def get_events():
         - case_sensitive (optional, default 'false'): Case sensitive search
         - sort_order (optional, default 'desc'): 'asc' (oldest first) or 'desc' (newest first)
         - limit (optional, default '100'): Maximum number of events to return
+        - exclude_self (optional, default 'false'): Exclude events for current pod
     """
-    global KUBE_NAMESPACE
+    global KUBE_NAMESPACE, KUBE_POD_NAME
 
     # Get query parameters
     namespace = request.args.get("namespace", KUBE_NAMESPACE)
@@ -1295,11 +1299,12 @@ def get_events():
     case_sensitive = request.args.get("case_sensitive", "false").lower() == "true"
     sort_order = request.args.get("sort_order", "desc").lower()
     limit_str = request.args.get("limit", "100")
+    exclude_self = request.args.get("exclude_self", "false").lower() == "true"
 
     app.logger.info(
         f"Request for /api/events: namespace='{namespace}', object_name='{object_name}', "
         f"object_kind='{object_kind}', event_type='{event_type}', reason='{reason}', "
-        f"search='{search_string}', sort='{sort_order}', limit='{limit_str}'"
+        f"search='{search_string}', sort='{sort_order}', limit='{limit_str}', exclude_self='{exclude_self}'"
     )
 
     try:
@@ -1329,6 +1334,14 @@ def get_events():
                 e
                 for e in filtered_events
                 if e.involved_object_name and (object_name.lower() in e.involved_object_name.lower())
+            ]
+
+        # Exclude self filter (exclude events for current pod)
+        if exclude_self and KUBE_POD_NAME:
+            filtered_events = [
+                e
+                for e in filtered_events
+                if not (e.involved_object_kind == "Pod" and e.involved_object_name == KUBE_POD_NAME)
             ]
 
         # Sort by timestamp
@@ -1481,6 +1494,183 @@ def get_event_sources():
                 "retry_suggested": False,
             }
         ), 500
+
+
+@app.route("/api/download_log", methods=["GET"])
+@require_api_key
+def download_log():
+    """
+    API endpoint to download a specific log file.
+    Query Parameters:
+        - pod_name (required): The name of the pod/container (format: 'pod/container').
+        - source (optional, default 'archived'): 'current' for current logs, 'archived' for archived logs.
+    """
+    global LOG_DIR, RETAIN_ALL_POD_LOGS, KUBE_NAMESPACE, v1
+
+    pod_name = request.args.get("pod_name")
+    source = request.args.get("source", "archived").lower()
+
+    if not pod_name:
+        return jsonify({"message": "Pod name is required"}), 400
+
+    try:
+        if source == "current":
+            # Download current logs
+            pod_name_parts = pod_name.split("/", 1) if "/" in pod_name else [pod_name, None]
+            actual_pod_name = pod_name_parts[0]
+            container_name = pod_name_parts[1]
+
+            # Handle init container naming
+            if container_name and container_name.startswith("init-"):
+                actual_container_name = container_name[5:]
+            else:
+                actual_container_name = container_name
+
+            # Fetch logs from Kubernetes
+            log_data = v1.read_namespaced_pod_log(
+                name=actual_pod_name,
+                namespace=KUBE_NAMESPACE,
+                container=actual_container_name,
+                timestamps=True,
+                follow=False,
+                _preload_content=True,
+            )
+
+            # Create a temporary file
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as temp_file:
+                temp_file.write(log_data)
+                temp_file_path = temp_file.name
+
+            # Send the file and clean up
+            filename = f"{pod_name.replace('/', '_')}_current.log"
+            return send_file(temp_file_path, as_attachment=True, download_name=filename, mimetype="text/plain")
+
+        elif source == "archived":
+            # Download archived logs
+            if not RETAIN_ALL_POD_LOGS:
+                return jsonify({"message": "Archived logs are not enabled"}), 403
+
+            log_file_path = os.path.join(LOG_DIR, f"{pod_name}.log")
+
+            if not os.path.exists(log_file_path):
+                return jsonify({"message": f"Archived log for {pod_name} not found"}), 404
+
+            filename = f"{pod_name.replace('/', '_')}_archived.log"
+            return send_file(log_file_path, as_attachment=True, download_name=filename, mimetype="text/plain")
+        else:
+            return jsonify({"message": "Invalid source. Use 'current' or 'archived'"}), 400
+
+    except ApiException as e:
+        app.logger.error(f"Kubernetes API error downloading logs for '{pod_name}': {e.status} - {e.reason}")
+        error_message, status_code = format_k8s_error(e)
+        return jsonify({"message": error_message}), status_code
+    except Exception as e:
+        app.logger.error(f"Error downloading log for '{pod_name}': {str(e)}", exc_info=True)
+        return jsonify({"message": f"Error downloading log: {str(e)}"}), 500
+
+
+@app.route("/api/download_pod_logs", methods=["GET"])
+@require_api_key
+def download_pod_logs():
+    """
+    API endpoint to download all logs for a specific pod as a zip file.
+    Query Parameters:
+        - pod_name (required): The name of the pod.
+    """
+    global LOG_DIR, RETAIN_ALL_POD_LOGS
+
+    pod_name = request.args.get("pod_name")
+
+    if not pod_name:
+        return jsonify({"message": "Pod name is required"}), 400
+
+    if not RETAIN_ALL_POD_LOGS:
+        return jsonify({"message": "Archived logs are not enabled"}), 403
+
+    if not os.path.exists(LOG_DIR):
+        return jsonify({"message": "Log directory does not exist"}), 404
+
+    try:
+        # Create a temporary zip file
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip:
+            temp_zip_path = temp_zip.name
+
+        # Create the zip file
+        with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            # Walk through the log directory and add all .log files for the specific pod
+            for root, _, files in os.walk(LOG_DIR):
+                for filename in files:
+                    if filename.endswith(".log"):
+                        file_path = os.path.join(root, filename)
+                        # Get relative path from LOG_DIR
+                        relative_path = os.path.relpath(file_path, LOG_DIR)
+
+                        # Check if this file belongs to the specified pod
+                        # Files are either "pod/container.log" or "pod.log"
+                        if relative_path.startswith(f"{pod_name}/") or relative_path == f"{pod_name}.log":
+                            zipf.write(file_path, relative_path)
+
+        # Check if any files were added to the zip
+        with zipfile.ZipFile(temp_zip_path, "r") as zipf:
+            if len(zipf.namelist()) == 0:
+                os.unlink(temp_zip_path)
+                return jsonify({"message": f"No logs found for pod {pod_name}"}), 404
+
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"logpilot_{pod_name}_logs_{timestamp}.zip"
+
+        return send_file(temp_zip_path, as_attachment=True, download_name=filename, mimetype="application/zip")
+
+    except Exception as e:
+        app.logger.error(f"Error creating pod log archive for {pod_name}: {str(e)}", exc_info=True)
+        return jsonify({"message": f"Error creating pod log archive: {str(e)}"}), 500
+
+
+@app.route("/api/download_all_logs", methods=["GET"])
+@require_api_key
+def download_all_logs():
+    """
+    API endpoint to download all archived logs as a zip file.
+    Only available if RETAIN_ALL_POD_LOGS is enabled.
+    """
+    global LOG_DIR, RETAIN_ALL_POD_LOGS
+
+    if not RETAIN_ALL_POD_LOGS:
+        return jsonify({"message": "Archived logs are not enabled"}), 403
+
+    if not os.path.exists(LOG_DIR):
+        return jsonify({"message": "Log directory does not exist"}), 404
+
+    try:
+        # Create a temporary zip file
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip:
+            temp_zip_path = temp_zip.name
+
+        # Create the zip file
+        with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            # Walk through the log directory and add all .log files
+            for root, _, files in os.walk(LOG_DIR):
+                for filename in files:
+                    if filename.endswith(".log"):
+                        file_path = os.path.join(root, filename)
+                        # Get relative path from LOG_DIR for the zip archive
+                        arcname = os.path.relpath(file_path, LOG_DIR)
+                        zipf.write(file_path, arcname)
+
+        # Get stats for the filename
+        total_size, file_count, _ = get_log_dir_stats(LOG_DIR)
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"logpilot_logs_{file_count}files_{timestamp}.zip"
+
+        return send_file(temp_zip_path, as_attachment=True, download_name=filename, mimetype="application/zip")
+
+    except Exception as e:
+        app.logger.error(f"Error creating log archive: {str(e)}", exc_info=True)
+        return jsonify({"message": f"Error creating log archive: {str(e)}"}), 500
 
 
 # --- Main Execution ---
