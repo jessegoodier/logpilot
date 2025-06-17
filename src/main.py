@@ -1306,8 +1306,9 @@ def get_events():
         - case_sensitive (optional, default 'false'): Case sensitive search
         - sort_order (optional, default 'desc'): 'asc' (oldest first) or 'desc' (newest first)
         - limit (optional, default '100'): Maximum number of events to return
+        - exclude_self (optional, default 'false'): Exclude events for current pod
     """
-    global KUBE_NAMESPACE
+    global KUBE_NAMESPACE, KUBE_POD_NAME
 
     # Get query parameters
     namespace = request.args.get("namespace", KUBE_NAMESPACE)
@@ -1319,11 +1320,12 @@ def get_events():
     case_sensitive = request.args.get("case_sensitive", "false").lower() == "true"
     sort_order = request.args.get("sort_order", "desc").lower()
     limit_str = request.args.get("limit", "100")
+    exclude_self = request.args.get("exclude_self", "false").lower() == "true"
 
     app.logger.info(
         f"Request for /api/events: namespace='{namespace}', object_name='{object_name}', "
         f"object_kind='{object_kind}', event_type='{event_type}', reason='{reason}', "
-        f"search='{search_string}', sort='{sort_order}', limit='{limit_str}'"
+        f"search='{search_string}', sort='{sort_order}', limit='{limit_str}', exclude_self='{exclude_self}'"
     )
 
     try:
@@ -1353,6 +1355,14 @@ def get_events():
                 e
                 for e in filtered_events
                 if e.involved_object_name and (object_name.lower() in e.involved_object_name.lower())
+            ]
+
+        # Exclude self filter (exclude events for current pod)
+        if exclude_self and KUBE_POD_NAME:
+            filtered_events = [
+                e
+                for e in filtered_events
+                if not (e.involved_object_kind == "Pod" and e.involved_object_name == KUBE_POD_NAME)
             ]
 
         # Sort by timestamp
