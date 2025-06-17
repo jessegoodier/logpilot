@@ -224,6 +224,19 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Download Controls -->
+            <div class="flex flex-wrap gap-2 mt-3">
+                <button id="downloadCurrentLog" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Download log for selected container">
+                    Download Current Log
+                </button>
+                <button id="downloadPodLogs" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Download all logs for selected pod as ZIP">
+                    Download Pod Logs (ZIP)
+                </button>
+                <button id="downloadAllLogs" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Download all archived logs as ZIP">
+                    Download All Logs (ZIP)
+                </button>
+            </div>
             <div id="namespaceDisplay" class="mt-3 text-xs text-gray-500 dark:text-gray-400">Namespace: <span id="namespaceValue">Loading...</span></div>
             <div id="errorDisplay" class="mt-2 text-sm text-red-600 dark:text-red-400"></div>
             <div id="loadingIndicator" class="hidden mt-2">
@@ -284,6 +297,9 @@
             const appVersion = document.getElementById('appVersion');
             const caseSensitiveToggle = document.getElementById('caseSensitiveToggle');
             const highlightToggle = document.getElementById('highlightToggle');
+            const downloadCurrentLog = document.getElementById('downloadCurrentLog');
+            const downloadPodLogs = document.getElementById('downloadPodLogs');
+            const downloadAllLogs = document.getElementById('downloadAllLogs');
 
             let currentLogs = [];
             let currentPodName = null;
@@ -1067,6 +1083,7 @@
             podSelector.addEventListener('change', () => {
                 logOutput.textContent = '';
                 currentLogs = [];
+                updateDownloadButtonStates();
                 fetchAndDisplayLogs();
             });
             sortOrder.addEventListener('change', fetchAndDisplayLogs);
@@ -1120,8 +1137,114 @@
                 });
             });
 
+            // Download button event listeners
+            downloadCurrentLog.addEventListener('click', async (event) => {
+                event.preventDefault();
+                await downloadSelectedLog();
+            });
+
+            downloadPodLogs.addEventListener('click', async (event) => {
+                event.preventDefault();
+                await downloadPodLogsZip();
+            });
+
+            downloadAllLogs.addEventListener('click', async (event) => {
+                event.preventDefault();
+                await downloadAllLogsZip();
+            });
+
+            // Download functions
+            async function downloadSelectedLog() {
+                const selectedValue = podSelector.value;
+                if (!selectedValue || selectedValue === 'all') {
+                    alert('Please select a specific pod to download logs.');
+                    return;
+                }
+
+                try {
+                    const selectedOption = podSelector.options[podSelector.selectedIndex];
+                    const isArchivedLog = selectedOption.dataset.isArchived === "true";
+                    const actualPodName = isArchivedLog ? selectedValue.substring("archived:".length) : selectedValue;
+                    const source = isArchivedLog ? 'archived' : 'current';
+
+                    const params = new URLSearchParams({
+                        pod_name: actualPodName,
+                        source: source
+                    });
+
+                    // Create a temporary link and trigger download
+                    const link = document.createElement('a');
+                    link.href = `/api/download_log?${params.toString()}`;
+                    link.download = '';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } catch (error) {
+                    console.error('Error downloading log:', error);
+                    alert(`Error downloading log: ${error.message}`);
+                }
+            }
+
+            async function downloadPodLogsZip() {
+                const selectedValue = podSelector.value;
+                if (!selectedValue || selectedValue === 'all') {
+                    alert('Please select a specific pod to download logs.');
+                    return;
+                }
+
+                try {
+                    const selectedOption = podSelector.options[podSelector.selectedIndex];
+                    const isArchivedLog = selectedOption.dataset.isArchived === "true";
+                    const actualPodName = isArchivedLog ? selectedValue.substring("archived:".length) : selectedValue;
+                    
+                    // Extract just the pod name (remove container part if present)
+                    const podName = actualPodName.includes('/') ? actualPodName.split('/')[0] : actualPodName;
+
+                    const params = new URLSearchParams({
+                        pod_name: podName
+                    });
+
+                    // Create a temporary link and trigger download
+                    const link = document.createElement('a');
+                    link.href = `/api/download_pod_logs?${params.toString()}`;
+                    link.download = '';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } catch (error) {
+                    console.error('Error downloading pod logs:', error);
+                    alert(`Error downloading pod logs: ${error.message}`);
+                }
+            }
+
+            async function downloadAllLogsZip() {
+                try {
+                    // Create a temporary link and trigger download
+                    const link = document.createElement('a');
+                    link.href = '/api/download_all_logs';
+                    link.download = '';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } catch (error) {
+                    console.error('Error downloading all logs:', error);
+                    alert(`Error downloading all logs: ${error.message}`);
+                }
+            }
+
+            // Function to update download button states
+            function updateDownloadButtonStates() {
+                const selectedValue = podSelector.value;
+                const hasSelection = selectedValue && selectedValue !== 'all';
+                
+                downloadCurrentLog.disabled = !hasSelection;
+                downloadPodLogs.disabled = !hasSelection;
+            }
+
             // Initial data fetch
-            fetchPods();
+            fetchPods().then(() => {
+                updateDownloadButtonStates();
+            });
             fetchVersion();
         });
     </script>
