@@ -42,7 +42,11 @@ known_first_party = ["tests", "scripts", "hooks"]
 # ==== bump-my-version ====
 
 [tool.bumpversion]
+<<<<<<< HEAD
 current_version = "0.7.0"
+=======
+current_version = "0.6.1"
+>>>>>>> bbfbdfa (Bump version to 0.6.1)
 commit = false
 tag = false
 allow_dirty = true
