@@ -558,41 +558,23 @@ def get_pods():
                     }
                 )
 
-            # Process regular containers
-            if len(containers) == 1 and not init_containers:
-                # Single container pod - use pod name only
-                last_log_time = get_last_log_timestamp(pod_name)
+            # Process regular containers (always use pod/container format)
+            for container in containers:
+                container_id = f"{pod_name}/{container}"
+                last_log_time = get_last_log_timestamp(pod_name, container)
 
                 pod_info.append(
                     {
-                        "id": pod_name,
+                        "id": container_id,
                         "pod_name": pod_name,
-                        "container_name": containers[0],
-                        "type": "pod",
+                        "container_name": container,
+                        "type": "container",
                         "health_status": health_info["status"],
                         "health_reason": health_info["reason"],
                         "last_log_time": last_log_time,
                         "created_time": created_time,
                     }
                 )
-            else:
-                # Multi-container pod - list each container separately
-                for container in containers:
-                    container_id = f"{pod_name}/{container}"
-                    last_log_time = get_last_log_timestamp(pod_name, container)
-
-                    pod_info.append(
-                        {
-                            "id": container_id,
-                            "pod_name": pod_name,
-                            "container_name": container,
-                            "type": "container",
-                            "health_status": health_info["status"],
-                            "health_reason": health_info["reason"],
-                            "last_log_time": last_log_time,
-                            "created_time": created_time,
-                        }
-                    )
 
         app.logger.info(f"Found {len(pod_info)} pod/container combinations in namespace '{KUBE_NAMESPACE}'")
         return jsonify(
@@ -900,14 +882,8 @@ def get_archived_pods():
                     # Add init containers with "init-" prefix
                     for init_container in init_containers:
                         running_pod_containers.add(f"{pod_name}/init-{init_container}")
-
-                    # Add regular containers
-                    if len(containers) == 1 and not init_containers:
-                        running_pod_containers.add(pod_name)
-                    else:
-                        # For pods with multiple containers or any init containers, add each container as pod/container
-                        for container in containers:
-                            running_pod_containers.add(f"{pod_name}/{container}")
+                    for container in containers:
+                        running_pod_containers.add(f"{pod_name}/{container}")
                 app.logger.info(f"Found {len(running_pod_containers)} currently running pod/container combinations.")
             except ApiException as e:
                 app.logger.warning(f"Could not fetch running pods for archived filter: {e.status} - {e.reason}")
@@ -916,7 +892,7 @@ def get_archived_pods():
 
             # List archived log files and exclude currently running pods
             # Use os.walk to search subdirectories since multi-container pods create subdirectories
-            for root, dirs, files in os.walk(LOG_DIR):
+            for root, _, files in os.walk(LOG_DIR):
                 for filename in files:
                     if filename.endswith(".log"):
                         # Get relative path from LOG_DIR to construct pod/container name
