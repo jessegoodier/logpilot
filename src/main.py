@@ -5,8 +5,11 @@ import re
 import tempfile
 import time
 import zipfile
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from functools import wraps
 from html import escape
+from typing import Any, Dict, List, Optional
 
 from flask import (
     Flask,
@@ -20,9 +23,6 @@ from flask import (
 )
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
 
 # --- Version Configuration ---
 __version__ = "0.7.0"
@@ -1429,39 +1429,41 @@ def get_event_sources():
                         # Convert ISO string back to datetime for comparison
                         try:
                             # Handle different ISO format variations
-                            if latest_ts.endswith('Z'):
-                                latest_ts_clean = latest_ts.replace('Z', '+00:00')
-                            elif '+' in latest_ts or latest_ts.endswith('UTC'):
+                            if latest_ts.endswith("Z"):
+                                latest_ts_clean = latest_ts.replace("Z", "+00:00")
+                            elif "+" in latest_ts or latest_ts.endswith("UTC"):
                                 latest_ts_clean = latest_ts
                             else:
-                                latest_ts_clean = latest_ts + '+00:00'
-                            
+                                latest_ts_clean = latest_ts + "+00:00"
+
                             latest_dt = datetime.fromisoformat(latest_ts_clean)
-                            
+
                             # Ensure both timestamps are timezone-aware for comparison
                             if event_timestamp.tzinfo is None:
                                 event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
                             if latest_dt.tzinfo is None:
                                 latest_dt = latest_dt.replace(tzinfo=timezone.utc)
-                                
+
                             should_update = event_timestamp > latest_dt
                         except (ValueError, AttributeError) as e:
                             app.logger.debug(f"Error parsing timestamp {latest_ts}: {e}")
                             should_update = True
                     else:
                         should_update = event_timestamp > latest_ts
-                    
+
                     if should_update:
                         sources[key]["latest_timestamp"] = event_timestamp.isoformat()
                         sources[key]["latest_event_type"] = event.type
             except Exception as e:
-                app.logger.warning(f"Error processing event for object {event.involved_object_kind}/{event.involved_object_name}: {e}")
+                app.logger.warning(
+                    f"Error processing event for object {event.involved_object_kind}/{event.involved_object_name}: {e}"
+                )
                 continue
 
         # Convert to list and sort by latest timestamp
         sources_list = list(sources.values())
         sources_list.sort(key=lambda x: x["latest_timestamp"] or "0000-00-00T00:00:00Z", reverse=True)
-        
+
         app.logger.info(f"Processed {len(sources_list)} unique event sources")
         return jsonify({"sources": sources_list, "namespace": namespace})
 
@@ -1634,6 +1636,7 @@ def download_pod_logs():
                             zipf.write(file_path, arcname)
 
         from datetime import datetime
+
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{pod_name}_logs_{timestamp}.zip"
 

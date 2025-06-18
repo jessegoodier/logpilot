@@ -5,13 +5,14 @@ log message sanitization, and enhanced error handling.
 """
 
 import json
-import pytest
-from unittest.mock import Mock
-from kubernetes.client.rest import ApiException
+import os
 
 # Import the functions we want to test
 import sys
-import os
+from unittest.mock import Mock
+
+import pytest
+from kubernetes.client.rest import ApiException
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 

@@ -4,6 +4,7 @@ Tests the functionality with actual Flask app and Kubernetes cluster interaction
 """
 
 import json
+
 import pytest
 import requests
 

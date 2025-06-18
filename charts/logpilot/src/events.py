@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import kubernetes  # type: ignore
 import rich.box  # type: ignore
+from kge import __version__
 
 # Prompt-toolkit imports
 from prompt_toolkit import Application  # type: ignore
@@ -19,8 +20,6 @@ from prompt_toolkit.styles import Style  # type: ignore
 from rich.console import Console  # type: ignore
 from rich.table import Table  # type: ignore
 from rich.text import Text  # type: ignore
-
-from kge import __version__
 
 # Initialize Rich Console
 console = Console()
