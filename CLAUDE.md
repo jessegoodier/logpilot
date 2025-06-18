@@ -30,7 +30,7 @@ The following commands are safe to run automatically without asking for permissi
 - `isort . --check-only` (check import ordering)
 - `ruff check .` (linting check)
 - `ruff check . --fix` (auto-fix linting issues)
-- `ruff format .` (auto-format code - replaces black)  
+- `ruff format .` (auto-format code - replaces black)
 - `ruff format . --check` (check formatting status)
 - `pytest --collect-only` (test collection without running)
 - `playwright install` (browser installation)
@@ -69,7 +69,7 @@ Before any git commits, ALWAYS run these safety checks:
 # Check if current branch is already merged
 gh pr view --json state --jq .state 2>/dev/null || echo "No PR found"
 
-# Check if working on merged branch 
+# Check if working on merged branch
 git branch -r --merged main | grep $(git branch --show-current) && echo "⚠️ BRANCH ALREADY MERGED!"
 
 # Check current branch and status
@@ -79,7 +79,7 @@ git status
 
 ### Modifying Operations
 - `git add`, `git commit`, `git push` (always ask before committing AND check if branch is merged)
-- `ruff check . --fix`, `ruff format .` (code modification) 
+- `ruff check . --fix`, `ruff format .` (code modification)
 - `kubectl apply`, `kubectl create`, `kubectl delete` (cluster changes)
 - `helm install`, `helm upgrade`, `helm uninstall` (deployment changes)
 
@@ -212,15 +212,15 @@ helm template test-release charts/logpilot
 ```
 
 ### Local Development
+
+do not modify files in the helm chart unless asked to. use the copy script below to copy the applicaton changes to helm chart and test.
+
 ```bash
 # Create Kubernetes test resources
-kubectl apply -f tests/log-gen-deployment.yaml -n log-viewer
-
-# Port forward to test the application locally
-kubectl port-forward -n log-viewer svc/logpilot-service 5001:5001
-
-# Run the application locally (requires kubeconfig)
-python src/main.py
+cp src/index.html src/main.py charts/logpilot/src \
+ && helm upgrade logpilot ./charts/logpilot \
+ && kubectl wait --for=condition=available deployment/logpilot --timeout=20s \
+ && kubectl port-forward deployment/logpilot 5001:5001
 ```
 
 ### Version Management
@@ -239,14 +239,14 @@ bump-my-version show-bump
 
 # Bump version parts (dry run)
 bump-my-version bump --dry-run patch      # 0.3.5 → 0.3.6
-bump-my-version bump --dry-run minor      # 0.3.5 → 0.4.0  
+bump-my-version bump --dry-run minor      # 0.3.5 → 0.4.0
 bump-my-version bump --dry-run major      # 0.3.5 → 1.0.0
 
 # Actually bump version (updates all configured files)
 bump-my-version bump --allow-dirty patch
 
 # Control version type via GitHub Actions workflow
-# - Version Type: "dev" creates development versions (0.3.6-dev)  
+# - Version Type: "dev" creates development versions (0.3.6-dev)
 # - Version Type: "release" creates production versions (0.3.6)
 # Both options work with all bump types (patch/minor/major/custom)
 # The workflow automatically updates all version files and commits to main branch
@@ -258,7 +258,7 @@ bump-my-version bump --allow-dirty patch
 
 **Files automatically updated by bump-my-version:**
 - `pyproject.toml` - Project version
-- `src/__init__.py` - Python package version  
+- `src/__init__.py` - Python package version
 - `src/main.py` - Application version
 - `charts/logpilot/Chart.yaml` - Helm chart version and appVersion
 - `charts/logpilot/pyproject.toml` - Chart package version
@@ -350,11 +350,11 @@ rm ruff-*.json ruff-*.txt
 
 #### Version Bumper Workflow Issues
 - **Problem**: "Did not find version in file" errors during version bump
-- **Quick Fix**: 
+- **Quick Fix**:
   ```bash
   # Check version mismatches across all files
   grep -r "__version__\|version.*=" src/ charts/logpilot/src/ pyproject.toml charts/logpilot/pyproject.toml k8s/deployment.yaml | sort
-  
+
   # Test the bumpversion config locally
   source .venv/bin/activate && bump-my-version bump --dry-run patch
   ```
@@ -362,7 +362,7 @@ rm ruff-*.json ruff-*.txt
 - **Prevention**: Always ensure `pyproject.toml` bumpversion config includes ALL files with version references
 
 #### Ruff Command Issues
-- **Problem**: `ruff format` doesn't support `--output-format=json` 
+- **Problem**: `ruff format` doesn't support `--output-format=json`
 - **Solution**: Use `ruff format . --check --diff` for checking formatting status
 - **Test locally**: Run the exact commands from the workflow to verify syntax
 
@@ -371,7 +371,7 @@ rm ruff-*.json ruff-*.txt
 - **Solution**: Use `microsoft/playwright-github-action@v1` with explicit browser specification
 - **Test locally**: `playwright install chromium` and verify test collection
 
-#### Kubernetes Testing Issues  
+#### Kubernetes Testing Issues
 - **Problem**: Timing issues with pod readiness or port forwarding
 - **Solution**: Add proper wait conditions and readiness checks
 - **Test locally**: Verify kubectl commands work with your cluster

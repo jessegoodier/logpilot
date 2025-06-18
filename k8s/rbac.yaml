@@ -12,7 +12,10 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["pods", "pods/log"] # Allows access to pods and their logs
-  verbs: ["get", "list", "watch"] # Allows reading/listing these resources 
+  verbs: ["get", "list", "watch"] # Allows reading/listing these resources
+- apiGroups: [""]
+  resources: ["events"] # Allows access to Kubernetes events
+  verbs: ["get", "list", "watch"] # Allows reading/listing events 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

@@ -4,9 +4,9 @@ Test runner for ANSI text processing and error handling tests.
 Run this script to execute all the new test functionality.
 """
 
+import os
 import subprocess
 import sys
-import os
 
 
 def run_tests():
