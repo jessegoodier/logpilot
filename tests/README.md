@@ -25,6 +25,13 @@ uv run pytest tests/test_app_playwright.py::test_log_viewer_e2e
   - `test_log_viewer_e2e` - Basic functionality test (pod selection, log viewing, search)
   - `test_sort_order_functionality` - Log sorting and archived pods test
 
+- **`test_auth_playwright.py`** - Authentication flow tests
+  - `test_access_without_api_key_shows_form` - Login form display when auth required
+  - `test_access_with_valid_api_key_in_url` - Valid API key in URL parameter
+  - `test_api_key_propagated_to_backend_requests` - API key forwarding to backend
+  - `test_manual_login_form_submission` - Manual login form functionality
+  - `test_access_without_auth_requirement` - No-auth mode behavior
+
 ### Configuration
 
 - **`conftest.py`** - Pytest configuration and Playwright browser settings
@@ -140,12 +147,38 @@ For rapid development iteration without full Kubernetes setup:
    TEST_BASE_URL="http://localhost:5000" uv run pytest tests/test_app_playwright.py
    ```
 
+### Authentication Testing
+
+Authentication tests verify that API key functionality works correctly:
+
+1. **Test with authentication required**:
+   ```bash
+   # Set API key and run auth tests
+   export API_KEY="test-api-key-12345"
+   uv run pytest tests/test_auth_playwright.py::TestAuthenticationFlow
+   ```
+
+2. **Test with authentication disabled**:
+   ```bash
+   # Disable auth and test no-auth mode
+   export API_KEY="no-key"
+   uv run pytest tests/test_auth_playwright.py::TestNoAuthenticationFlow
+   ```
+
+3. **Run all authentication tests**:
+   ```bash
+   # Test both auth and no-auth scenarios
+   export API_KEY="test-api-key-12345"
+   uv run pytest tests/test_auth_playwright.py
+   ```
+
 ## Test Configuration
 
 ### Environment Variables
 
 - `TEST_BASE_URL` - Base URL for the application (default: `http://localhost:5001`)
 - `PYTHONPATH` - Set to `.` to ensure proper imports
+- `API_KEY` - Required for authentication tests (set to `test-api-key-12345` for auth tests, or `no-key` for no-auth tests)
 
 ### Browser Configuration
 

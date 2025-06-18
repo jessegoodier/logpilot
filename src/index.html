@@ -614,18 +614,36 @@
             async function fetchFromServer(endpoint, options = {}) {
                 errorDisplay.textContent = '';
                 try {
-                    const absoluteUrl = new URL(endpoint, window.location.href).href;
-                    const response = await fetch(absoluteUrl, options);
+                    const url = new URL(endpoint, window.location.href);
+                    
+                    // Extract API key from current page URL and add to API requests
+                    const currentUrlParams = new URLSearchParams(window.location.search);
+                    const apiKey = currentUrlParams.get('api_key');
+                    if (apiKey) {
+                        url.searchParams.set('api_key', apiKey);
+                    }
+                    
+                    // Ensure Accept header is set for all API requests to get JSON responses
+                    const defaultHeaders = {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    };
+                    
+                    const response = await fetch(url.href, {
+                        ...options,
+                        headers: defaultHeaders
+                    });
 
                     if (!response.ok) {
                         const errorData = await response.json().catch(() => ({ 
-                            message: `HTTP error! status: ${response.status} on ${absoluteUrl}`,
+                            message: `HTTP error! status: ${response.status} on ${url.href}`,
                             error_type: 'http_error',
                             retry_suggested: response.status >= 500 || response.status === 429
                         }));
                         
                         // Enhanced error with metadata
-                        const enhancedError = new Error(errorData.message || `HTTP error! status: ${response.status} on ${absoluteUrl}`);
+                        const enhancedError = new Error(errorData.message || `HTTP error! status: ${response.status} on ${url.href}`);
                         enhancedError.errorType = errorData.error_type || 'http_error';
                         enhancedError.retrySuggested = errorData.retry_suggested || false;
                         enhancedError.statusCode = response.status;
@@ -634,7 +652,7 @@
                     }
                     return await response.json();
                 } catch (error) {
-                    console.error(`Error fetching ${endpoint} (resolved to ${new URL(endpoint, window.location.href).href}):`, error);
+                    console.error(`Error fetching ${endpoint} (resolved to ${url.href}):`, error);
                     
                     // Enhanced error display with retry suggestion
                     let errorMessage = `Error: ${error.message}`;

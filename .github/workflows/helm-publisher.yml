@@ -7,7 +7,7 @@ on:
         description: "Branch to release from"
         required: true
         type: string
-        default: main
+        default: v0.8.0
   # Automatic trigger when version bump PRs are merged to main
   push:
     branches:
