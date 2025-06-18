@@ -25,7 +25,7 @@ from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
 # --- Version Configuration ---
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 # --- Log Archiver Imports ---
 from log_archiver import get_log_dir_stats, start_log_cleanup_job, watch_pods_and_archive
@@ -313,6 +313,8 @@ def strip_ansi_codes(text):
     Remove ANSI escape sequences from text.
     This includes color codes, cursor movement, and other control sequences.
     """
+    if text is None:
+        return None
     # ANSI escape sequence pattern
     # Matches: ESC[ followed by parameter bytes (0x30-0x3F), then intermediate bytes (0x20-0x2F), then final byte (0x40-0x7E)
     ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
