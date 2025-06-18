@@ -1,22 +1,46 @@
 name: Helm Chart Publisher
 on:
+  # Manual trigger
   workflow_dispatch:
     inputs:
       branch:
         description: "Branch to release from"
         required: true
         type: string
-        default: v0.8.0
+        default: v0.8.1
+  # Automatic trigger when version bump PRs are merged to main
+  push:
+    branches:
+      - main
+    paths:
+      - 'pyproject.toml'
+      - 'charts/logpilot/Chart.yaml'
+  # Automatic trigger when version tags are created
+  create:
+    tags:
+      - 'v*'
 jobs:
   helm-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    # Only run if triggered manually OR if this is a version bump on main
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'Version Bump')) ||
+      (github.event_name == 'create' && startsWith(github.ref, 'refs/tags/v'))
     steps:
+      - name: Debug trigger information
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Head commit message: ${{ github.event.head_commit.message }}"
+          echo "Branch input: ${{ github.event.inputs.branch }}"
+      
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch }}
+          ref: ${{ github.event.inputs.branch || github.ref }}
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -36,18 +60,37 @@ jobs:
           uv pip install -e '.[dev]'
           # Ensure we're in the right directory
           cd "$GITHUB_WORKSPACE"
-          echo "version=$(python -c "import src; print(src.__version__)")" >> $GITHUB_OUTPUT
+          VERSION=$(python -c "import src; print(src.__version__)")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version: $VERSION"
+      
+      - name: Check if release already exists
+        id: check_release
+        run: |
+          if gh release view "v${{ steps.version.outputs.version }}" > /dev/null 2>&1; then
+            echo "Release v${{ steps.version.outputs.version }} already exists"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "Release v${{ steps.version.outputs.version }} does not exist, proceeding"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Helm
+        if: steps.check_release.outputs.skip != 'true'
         uses: azure/setup-helm@v3
         with:
           version: '3.17.3'
       - name: Install helm-unittest plugin
+        if: steps.check_release.outputs.skip != 'true'
         run: |
           helm plugin install https://github.com/helm-unittest/helm-unittest
       - name: Create dist directory
+        if: steps.check_release.outputs.skip != 'true'
         run: mkdir -p dist
 
       - name: Run Helm tests before packaging
+        if: steps.check_release.outputs.skip != 'true'
         run: |
           echo "Running Helm unit tests..."
           helm unittest charts/logpilot
@@ -59,23 +102,27 @@ jobs:
           helm template test-release charts/logpilot > /dev/null
           echo "All Helm tests passed!"
       - name: Package Helm chart
+        if: steps.check_release.outputs.skip != 'true'
         run: |
           helm package charts/logpilot --destination dist/
           echo "Packaged charts:"
           ls -la dist/
       - name: Fetch existing index
+        if: steps.check_release.outputs.skip != 'true'
         run: |
           # Create a temporary directory for the existing index
           mkdir -p /tmp/helm-index
           # Try to fetch the existing index from gh-pages
           curl -s -o /tmp/helm-index/index.yaml "https://${{ github.repository_owner }}.github.io/$(echo ${{ github.repository }} | cut -d'/' -f2)/index.yaml" || touch /tmp/helm-index/index.yaml
       - name: Generate Helm repository index
+        if: steps.check_release.outputs.skip != 'true'
         run: |
           # Generate new index and merge with existing one
           helm repo index dist/ --url https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/ --merge /tmp/helm-index/index.yaml
           echo "Generated index.yaml:"
           cat dist/index.yaml
       - name: Create Release
+        if: steps.check_release.outputs.skip != 'true'
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v${{ steps.version.outputs.version }}
@@ -91,6 +138,7 @@ jobs:
             - Updated Helm chart version to match Python package version
             - Published new Helm chart release
       - name: Deploy to gh-pages
+        if: steps.check_release.outputs.skip != 'true'
         run: |-
           # Create gh-pages branch if it doesn't exist
           git checkout --orphan gh-pages || git checkout gh-pages
