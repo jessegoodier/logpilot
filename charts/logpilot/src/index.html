@@ -1923,6 +1923,13 @@
                         source: source
                     });
 
+                    // Include API key if present
+                    const currentUrlParams = new URLSearchParams(window.location.search);
+                    const apiKey = currentUrlParams.get('api_key');
+                    if (apiKey) {
+                        params.set('api_key', apiKey);
+                    }
+
                     // Create a temporary link and trigger download
                     const link = document.createElement('a');
                     link.href = `/api/download_log?${params.toString()}`;
@@ -1955,6 +1962,13 @@
                         pod_name: podName
                     });
 
+                    // Include API key if present
+                    const currentUrlParams = new URLSearchParams(window.location.search);
+                    const apiKey = currentUrlParams.get('api_key');
+                    if (apiKey) {
+                        params.set('api_key', apiKey);
+                    }
+
                     // Create a temporary link and trigger download
                     const link = document.createElement('a');
                     link.href = `/api/download_pod_logs?${params.toString()}`;
@@ -1970,9 +1984,18 @@
 
             async function downloadAllLogsZip() {
                 try {
+                    // Include API key if present
+                    const currentUrlParams = new URLSearchParams(window.location.search);
+                    const apiKey = currentUrlParams.get('api_key');
+                    
+                    let downloadUrl = '/api/download_all_logs';
+                    if (apiKey) {
+                        downloadUrl += `?api_key=${encodeURIComponent(apiKey)}`;
+                    }
+
                     // Create a temporary link and trigger download
                     const link = document.createElement('a');
-                    link.href = '/api/download_all_logs';
+                    link.href = downloadUrl;
                     link.download = '';
                     document.body.appendChild(link);
                     link.click();
