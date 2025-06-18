@@ -201,15 +201,27 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end mt-2">
+            <!-- View Mode Toggle -->
+            <div class="mb-4">
+                <div class="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1 w-fit">
+                    <button id="logsToggle" class="px-4 py-2 text-sm font-medium rounded-md transition-colors bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm">
+                        📋 Logs
+                    </button>
+                    <button id="eventsToggle" class="px-4 py-2 text-sm font-medium rounded-md transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+                        📅 Events
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end mt-2">
                 <div>
-                    <label for="podSelector" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Pod <a href="#" id="refreshPods" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Refresh)</a></label>
+                    <label for="podSelector" class="block text-sm font-medium text-gray-700 dark:text-gray-300"><span id="selectorLabel">Pod</span> <a href="#" id="refreshPods" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Refresh)</a></label>
                     <select id="podSelector" class="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
                         <option value="all">All Pods</option>
                     </select>
                 </div>
 
-                <div class="sm:col-span-2">
+                <div>
                     <label for="searchBox" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Search <a href="#" id="clearSearch" class="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs">(Clear)</a></label>
                     <div class="mt-1 relative">
                         <input type="text" id="searchBox" placeholder="Enter to search..." title="Search searches all available logs, not just the current page. Results are then limited by Lines per Page setting." class="block w-full py-2 px-3 pr-24 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
@@ -300,11 +312,42 @@
             const downloadCurrentLog = document.getElementById('downloadCurrentLog');
             const downloadPodLogs = document.getElementById('downloadPodLogs');
             const downloadAllLogs = document.getElementById('downloadAllLogs');
+            const logsToggle = document.getElementById('logsToggle');
+            const eventsToggle = document.getElementById('eventsToggle');
+            const selectorLabel = document.getElementById('selectorLabel');
 
             let currentLogs = [];
+            let currentEvents = [];
             let currentPodName = null;
             let caseSensitive = localStorage.getItem('caseSensitive') === 'true';
             let highlightEnabled = localStorage.getItem('highlightEnabled') !== 'false'; // Default to true if not set
+            let viewMode = localStorage.getItem('viewMode') || 'logs'; // 'logs' or 'events'
+
+            // Shared color mapping for consistent colors across logs and events
+            let globalPodColorMap = new Map();
+            let globalColorIndex = 0;
+            
+            // Define pod colors - using a mix of colors that work well in both light and dark modes
+            const podColors = [
+                ['text-blue-600', 'dark:text-blue-400'],
+                ['text-purple-600', 'dark:text-purple-400'],
+                ['text-cyan-600', 'dark:text-cyan-400'],
+                ['text-emerald-600', 'dark:text-emerald-400'],
+                ['text-amber-600', 'dark:text-amber-400'],
+                ['text-rose-600', 'dark:text-rose-400'],
+                ['text-violet-600', 'dark:text-violet-400'],
+                ['text-teal-600', 'dark:text-teal-400'],
+                ['text-orange-600', 'dark:text-orange-400'],
+                ['text-pink-600', 'dark:text-pink-400']
+            ];
+
+            function getOrCreateColorMapping() {
+                return {
+                    podColorMap: globalPodColorMap,
+                    colorIndex: globalColorIndex,
+                    updateColorIndex: (newIndex) => { globalColorIndex = newIndex; }
+                };
+            }
 
             // --- Version Information ---
             async function fetchVersion() {
@@ -487,7 +530,7 @@
                 localStorage.setItem('caseSensitive', caseSensitive.toString());
                 updateCaseSensitiveDisplay();
                 if (searchBox.value.trim()) {
-                    fetchAndDisplayLogs();
+                    fetchAndDisplayData();
                 }
             });
 
@@ -496,12 +539,57 @@
                 highlightEnabled = !highlightEnabled;
                 localStorage.setItem('highlightEnabled', highlightEnabled.toString());
                 updateHighlightDisplay();
-                renderLogs(); // Just re-render the logs since we don't need to fetch again
+                // Just re-render since we don't need to fetch again
+                if (viewMode === 'logs') {
+                    renderLogs();
+                } else {
+                    renderEvents();
+                }
             });
 
             // Initialize display states
             updateCaseSensitiveDisplay();
             updateHighlightDisplay();
+
+            // --- View Mode Toggle ---
+            const updateViewModeDisplay = () => {
+                if (viewMode === 'logs') {
+                    logsToggle.classList.add('bg-white', 'dark:bg-gray-600', 'text-gray-900', 'dark:text-gray-100', 'shadow-sm');
+                    logsToggle.classList.remove('text-gray-600', 'dark:text-gray-400');
+                    eventsToggle.classList.remove('bg-white', 'dark:bg-gray-600', 'text-gray-900', 'dark:text-gray-100', 'shadow-sm');
+                    eventsToggle.classList.add('text-gray-600', 'dark:text-gray-400');
+                    selectorLabel.textContent = 'Pod';
+                } else {
+                    eventsToggle.classList.add('bg-white', 'dark:bg-gray-600', 'text-gray-900', 'dark:text-gray-100', 'shadow-sm');
+                    eventsToggle.classList.remove('text-gray-600', 'dark:text-gray-400');
+                    logsToggle.classList.remove('bg-white', 'dark:bg-gray-600', 'text-gray-900', 'dark:text-gray-100', 'shadow-sm');
+                    logsToggle.classList.add('text-gray-600', 'dark:text-gray-400');
+                    selectorLabel.textContent = 'Object';
+                }
+            };
+
+            logsToggle.addEventListener('click', () => {
+                if (viewMode !== 'logs') {
+                    const previousSelection = podSelector.value; // Store current selection
+                    viewMode = 'logs';
+                    localStorage.setItem('viewMode', viewMode);
+                    updateViewModeDisplay();
+                    fetchPodsAndRestoreSelection(previousSelection); // Refresh and try to restore selection
+                }
+            });
+
+            eventsToggle.addEventListener('click', () => {
+                if (viewMode !== 'events') {
+                    const previousSelection = podSelector.value; // Store current selection
+                    viewMode = 'events';
+                    localStorage.setItem('viewMode', viewMode);
+                    updateViewModeDisplay();
+                    fetchEventSourcesAndRestoreSelection(previousSelection); // Refresh and try to restore selection
+                }
+            });
+
+            // Initialize view mode
+            updateViewModeDisplay();
 
             // --- API Calls ---
             async function fetchFromServer(endpoint, options = {}) {
@@ -612,6 +700,56 @@
                 return `${paddedPod} | ${paddedContainer} | ${healthEmoji} | ${timeText}`;
             }
 
+            function formatUnifiedOptionText(source, maxPodLength, maxContainerLength, viewMode) {
+                let podName, containerName;
+                
+                if (source.sourceType === 'event_source') {
+                    // For event sources, show Kind/Name format
+                    podName = source.pod_name;
+                    containerName = source.container_name; // This contains the Kind
+                } else {
+                    // For pods, use existing logic
+                    if (source.id.includes('/')) {
+                        const parts = source.id.split('/');
+                        podName = parts[0];
+                        containerName = parts[1];
+                    } else {
+                        podName = source.pod_name || source.id;
+                        containerName = source.container_name;
+                    }
+                    
+                    // Add type indicators
+                    if (source.type === 'init_container') {
+                        containerName = `${containerName} [INIT]`;
+                    } else if (source.type === 'pod' && containerName === podName) {
+                        containerName = '-'; // Single container pod
+                    }
+                }
+                
+                // Determine status emoji/indicator
+                let statusEmoji;
+                if (source.sourceType === 'event_source') {
+                    statusEmoji = source.health_status === 'warning' ? '⚠️' : '📅';
+                } else if (source.sourceType === 'archived') {
+                    statusEmoji = '📁';
+                } else {
+                    statusEmoji = getHealthStatusEmoji(source.health_status);
+                    // Add indicator if this source has both logs and events
+                    if (source.hasLogs && source.hasEvents) {
+                        statusEmoji += '📅'; // Add event indicator
+                    }
+                }
+                
+                // Format time
+                const timeText = formatTimestamp(source.last_log_time);
+                
+                // Pad for alignment
+                const paddedPod = podName.padEnd(maxPodLength);
+                const paddedContainer = containerName.padEnd(maxContainerLength);
+                
+                return `${paddedPod} | ${paddedContainer} | ${statusEmoji} | ${timeText}`;
+            }
+
             function calculateMaxLengths(livePodsData, archivedPodsData, currentPodName) {
                 let maxPodLength = 8; // Minimum for "All Pods"
                 let maxContainerLength = 9; // Minimum for "Container"
@@ -658,18 +796,325 @@
                 return { maxPodLength, maxContainerLength };
             }
 
-            async function fetchPods() {
+            function createUnifiedSourceList(livePodsData, eventSourcesData, archivedPodsData, currentPodName) {
+                const unifiedSources = [];
+                const seenKeys = new Set();
+
+                // Add live pods first
+                if (livePodsData.pods && livePodsData.pods.length > 0) {
+                    livePodsData.pods.forEach(podInfo => {
+                        const key = podInfo.id;
+                        if (!seenKeys.has(key)) {
+                            unifiedSources.push({
+                                ...podInfo,
+                                sourceType: 'pod',
+                                hasLogs: true,
+                                hasEvents: false // Will be updated if found in events
+                            });
+                            seenKeys.add(key);
+                        }
+                    });
+                }
+
+                // Add current pod if not in live pods and excludeSelf is unchecked
+                if (!excludeSelf.checked && currentPodName && !seenKeys.has(currentPodName)) {
+                    unifiedSources.push({
+                        id: currentPodName,
+                        pod_name: currentPodName,
+                        container_name: currentPodName,
+                        type: 'pod',
+                        health_status: 'unknown',
+                        health_reason: 'Current pod (limited info available)',
+                        last_log_time: null,
+                        created_time: null,
+                        sourceType: 'pod',
+                        hasLogs: true,
+                        hasEvents: false
+                    });
+                    seenKeys.add(currentPodName);
+                }
+
+                // Add event sources and mark existing pods as having events
+                if (eventSourcesData.sources && eventSourcesData.sources.length > 0) {
+                    eventSourcesData.sources.forEach(source => {
+                        const podKey = source.object_name; // Try to match by pod name
+                        const fullKey = source.id; // Full "Kind/Name" format
+
+                        // Check if this is a pod we already have
+                        let existingPod = unifiedSources.find(s => 
+                            s.pod_name === source.object_name || 
+                            s.id === source.object_name ||
+                            s.id.includes(source.object_name)
+                        );
+
+                        if (existingPod) {
+                            // Mark existing pod as having events
+                            existingPod.hasEvents = true;
+                            existingPod.eventInfo = source;
+                        } else if (!seenKeys.has(fullKey)) {
+                            // Add as new event-only source
+                            unifiedSources.push({
+                                id: fullKey,
+                                pod_name: source.object_name,
+                                container_name: `${source.object_kind}`,
+                                type: 'event_source',
+                                health_status: source.latest_event_type === 'Warning' ? 'warning' : 'normal',
+                                health_reason: `${source.event_count} events`,
+                                last_log_time: source.latest_timestamp,
+                                created_time: null,
+                                sourceType: 'event_source',
+                                hasLogs: false,
+                                hasEvents: true,
+                                eventInfo: source
+                            });
+                            seenKeys.add(fullKey);
+                        }
+                    });
+                }
+
+                // Add archived pods
+                if (archivedPodsData.archived_pods && archivedPodsData.archived_pods.length > 0) {
+                    const livePodNames = new Set(livePodsData.pods?.map(p => p.id) || []);
+                    const filteredArchivedPods = archivedPodsData.archived_pods.filter(
+                        podName => !livePodNames.has(podName) && !seenKeys.has(`archived:${podName}`)
+                    );
+
+                    filteredArchivedPods.forEach(podName => {
+                        const archivedKey = `archived:${podName}`;
+                        unifiedSources.push({
+                            id: archivedKey,
+                            pod_name: podName,
+                            container_name: '[ARCHIVED]',
+                            type: 'archived',
+                            health_status: 'archived',
+                            health_reason: 'Archived pod logs',
+                            last_log_time: null,
+                            created_time: null,
+                            sourceType: 'archived',
+                            hasLogs: true,
+                            hasEvents: false
+                        });
+                        seenKeys.add(archivedKey);
+                    });
+                }
+
+                return unifiedSources;
+            }
+
+            function calculateMaxLengthsUnified(unifiedSources) {
+                let maxPodLength = 8; // Minimum for headers
+                let maxContainerLength = 9;
+                
+                unifiedSources.forEach(source => {
+                    let podName, containerName;
+                    if (source.id.includes('/')) {
+                        const parts = source.id.split('/');
+                        podName = parts[0];
+                        containerName = parts[1];
+                    } else {
+                        podName = source.pod_name || source.id;
+                        containerName = source.container_name;
+                    }
+                    
+                    if (source.type === 'init_container') {
+                        containerName = `${containerName} [INIT]`;
+                    } else if (source.type === 'pod' && containerName === podName) {
+                        containerName = '-';
+                    }
+                    
+                    maxPodLength = Math.max(maxPodLength, podName.length);
+                    maxContainerLength = Math.max(maxContainerLength, containerName.length);
+                });
+                
+                return { maxPodLength, maxContainerLength };
+            }
+
+            async function fetchEventSources() {
                 try {
                     // Store current selection before refresh
                     const currentSelection = podSelector.value;
 
-                    // Fetch live pods with exclude_self parameter
+                    const eventSourcesData = await fetchFromServer('/api/event_sources');
+                    namespaceValue.textContent = eventSourcesData.namespace || 'N/A';
+
+                    // Calculate maximum lengths for alignment
+                    let maxObjectLength = 15; // Minimum for "All Objects"
+                    let maxKindLength = 10; // Minimum for "Kind"
+                    
+                    if (eventSourcesData.sources && eventSourcesData.sources.length > 0) {
+                        eventSourcesData.sources.forEach(source => {
+                            maxObjectLength = Math.max(maxObjectLength, source.object_name.length);
+                            maxKindLength = Math.max(maxKindLength, source.object_kind.length);
+                        });
+                    }
+                    
+                    // Create aligned header
+                    const headerObject = "Object".padEnd(maxObjectLength);
+                    const headerKind = "Kind".padEnd(maxKindLength);
+                    
+                    // Reset selector with aligned header and "All Objects" option
+                    const allObjectsName = "All Objects".padEnd(maxObjectLength);
+                    const allObjectsKind = "-".padEnd(maxKindLength);
+                    podSelector.innerHTML = `
+                        <option value="" disabled style="font-weight: bold; color: #6b7280; background-color: #f9fafb;">── ${headerObject} | ${headerKind} | Events | Last Event ──</option>
+                        <option value="all">${allObjectsName} | ${allObjectsKind} | 📅 | -</option>
+                    `;
+
+                    if (eventSourcesData.sources && eventSourcesData.sources.length > 0) {
+                        const sourcesGroup = document.createElement('optgroup');
+                        sourcesGroup.label = "Event Sources";
+                        
+                        eventSourcesData.sources.forEach(source => {
+                            const paddedName = source.object_name.padEnd(maxObjectLength);
+                            const paddedKind = source.object_kind.padEnd(maxKindLength);
+                            const eventEmoji = source.latest_event_type === 'Warning' ? '⚠️' : '📅';
+                            const timeText = formatTimestamp(source.latest_timestamp);
+                            
+                            const option = document.createElement('option');
+                            option.value = source.id;
+                            option.textContent = `${paddedName} | ${paddedKind} | ${eventEmoji} | ${timeText}`;
+                            option.title = `${source.object_kind}/${source.object_name} - ${source.event_count} events`;
+                            sourcesGroup.appendChild(option);
+                        });
+                        
+                        podSelector.appendChild(sourcesGroup);
+                    } else {
+                        const noSourcesText = "No event sources found".padEnd(maxObjectLength);
+                        const noSourcesKind = "-".padEnd(maxKindLength);
+                        podSelector.innerHTML = `
+                            <option value="" disabled style="font-weight: bold; color: #6b7280; background-color: #f9fafb;">── ${headerObject} | ${headerKind} | Events | Last Event ──</option>
+                            <option value="all">${noSourcesText} | ${noSourcesKind} | ❌ | -</option>
+                        `;
+                    }
+
+                    // Try to restore previous selection
+                    if (currentSelection) {
+                        const optionExists = Array.from(podSelector.options).some(option => option.value === currentSelection);
+                        if (optionExists) {
+                            podSelector.value = currentSelection;
+                        } else {
+                            podSelector.value = "all";
+                        }
+                    } else {
+                        podSelector.value = "all";
+                    }
+
+                    // Refresh data for the current selection
+                    fetchAndDisplayData();
+                } catch (error) {
+                    namespaceValue.textContent = 'Error loading';
+                    errorDisplay.textContent = `Error fetching event sources: ${error.message}`;
+                    
+                    const defaultMaxObjectLength = 15;
+                    const defaultMaxKindLength = 10;
+                    const headerObject = "Object".padEnd(defaultMaxObjectLength);
+                    const headerKind = "Kind".padEnd(defaultMaxKindLength);
+                    const errorText = "Error loading".padEnd(defaultMaxObjectLength);
+                    const errorKind = "-".padEnd(defaultMaxKindLength);
+                    podSelector.innerHTML = `
+                        <option value="" disabled style="font-weight: bold; color: #6b7280; background-color: #f9fafb;">── ${headerObject} | ${headerKind} | Events | Last Event ──</option>
+                        <option value="all">${errorText} | ${errorKind} | ❌ | -</option>
+                    `;
+                }
+            }
+
+            // Helper function to find the best matching selection when switching views
+            function findBestMatch(previousSelection, availableOptions) {
+                if (!previousSelection || previousSelection === 'all') {
+                    return 'all';
+                }
+
+                // Try exact match first
+                for (const option of availableOptions) {
+                    if (option.value === previousSelection) {
+                        return previousSelection;
+                    }
+                }
+
+                // For logs->events: try to match pod name to object name
+                // For events->logs: try to match object name to pod name
+                let extractedName = '';
+                if (previousSelection.includes('/')) {
+                    // Extract the object/pod name part
+                    const parts = previousSelection.split('/');
+                    extractedName = parts[parts.length - 1]; // Get the last part (name)
+                }
+
+                // Try to find a partial match
+                for (const option of availableOptions) {
+                    if (option.value === 'all' || !option.value) continue;
+                    
+                    // Check if the extracted name appears in this option
+                    if (extractedName && option.value.includes(extractedName)) {
+                        return option.value;
+                    }
+                    
+                    // Check if any part of the previous selection matches
+                    if (option.value.includes(previousSelection) || previousSelection.includes(option.value)) {
+                        return option.value;
+                    }
+                }
+
+                // Fallback to 'all' if no match found
+                return 'all';
+            }
+
+            async function fetchPodsAndRestoreSelection(previousSelection) {
+                try {
+                    await fetchUnifiedSources();
+                    
+                    // Try to restore or find best match for the selection
+                    const bestMatch = findBestMatch(previousSelection, Array.from(podSelector.options));
+                    podSelector.value = bestMatch;
+                    
+                    // Trigger data fetch for the restored selection
+                    fetchAndDisplayData();
+                } catch (error) {
+                    console.error('Error in fetchPodsAndRestoreSelection:', error);
+                }
+            }
+
+            async function fetchEventSourcesAndRestoreSelection(previousSelection) {
+                try {
+                    await fetchUnifiedSources();
+                    
+                    // Try to restore or find best match for the selection
+                    const bestMatch = findBestMatch(previousSelection, Array.from(podSelector.options));
+                    podSelector.value = bestMatch;
+                    
+                    // Trigger data fetch for the restored selection
+                    fetchAndDisplayData();
+                } catch (error) {
+                    console.error('Error in fetchEventSourcesAndRestoreSelection:', error);
+                }
+            }
+
+            // Keep the old functions for backward compatibility but make them call the unified function
+            async function fetchPods() {
+                return fetchUnifiedSources();
+            }
+
+            async function fetchEventSources() {
+                return fetchUnifiedSources();
+            }
+
+            async function fetchUnifiedSources() {
+                try {
+                    // Store current selection before refresh
+                    const currentSelection = podSelector.value;
+
+                    // Fetch both pods and event sources to create a unified list
                     const params = new URLSearchParams();
                     if (excludeSelf.checked) {
                         params.append('exclude_self', 'true');
                     }
-                    const livePodsData = await fetchFromServer(`/api/pods?${params.toString()}`);
-                    namespaceValue.textContent = livePodsData.namespace || 'N/A';
+                    
+                    const [livePodsData, eventSourcesData] = await Promise.all([
+                        fetchFromServer(`/api/pods?${params.toString()}`),
+                        fetchFromServer('/api/event_sources')
+                    ]);
+                    
+                    namespaceValue.textContent = livePodsData.namespace || eventSourcesData.namespace || 'N/A';
                     currentPodName = livePodsData.current_pod || null;
 
                     // Fetch archived pods
@@ -680,116 +1125,106 @@
                         console.warn("Could not fetch archived pods, possibly disabled:", error.message);
                     }
 
+                    // Create unified source list combining pods, event sources, and archived pods
+                    const unifiedSources = createUnifiedSourceList(livePodsData, eventSourcesData, archivedPodsData, currentPodName);
+
                     // Calculate maximum lengths for alignment
-                    const { maxPodLength, maxContainerLength } = calculateMaxLengths(livePodsData, archivedPodsData, currentPodName);
+                    const { maxPodLength, maxContainerLength } = calculateMaxLengthsUnified(unifiedSources);
                     
-                    // Create aligned header
-                    const headerPod = "Pod".padEnd(maxPodLength);
-                    const headerContainer = "Container".padEnd(maxContainerLength);
+                    // Create aligned header - adjust label based on view mode
+                    const headerPod = (viewMode === 'events' ? "Object" : "Pod").padEnd(maxPodLength);
+                    const headerContainer = (viewMode === 'events' ? "Kind/Container" : "Container").padEnd(maxContainerLength);
                     
-                    // Reset selector with aligned header and "All Pods" option
-                    const allPodsPod = "All Pods".padEnd(maxPodLength);
-                    const allPodsContainer = "-".padEnd(maxContainerLength);
+                    // Reset selector with aligned header and "All" option
+                    const allLabel = viewMode === 'events' ? "All Objects" : "All Pods";
+                    const allPadded = allLabel.padEnd(maxPodLength);
+                    const allContainerPadded = "-".padEnd(maxContainerLength);
+                    const statusLabel = viewMode === 'events' ? "Events" : "Status";
+                    const timeLabel = viewMode === 'events' ? "Last Event" : "Last Log";
+                    
                     podSelector.innerHTML = `
-                        <option value="" disabled style="font-weight: bold; color: #6b7280; background-color: #f9fafb;">── ${headerPod} | ${headerContainer} | Status | Last Log ──</option>
-                        <option value="all">${allPodsPod} | ${allPodsContainer} | 🌐 | -</option>
+                        <option value="" disabled style="font-weight: bold; color: #6b7280; background-color: #f9fafb;">── ${headerPod} | ${headerContainer} | ${statusLabel} | ${timeLabel} ──</option>
+                        <option value="all">${allPadded} | ${allContainerPadded} | 🌐 | -</option>
                     `;
 
-                    const createOption = (value, text, isArchived = false) => {
+                    const createOption = (value, text, isArchived = false, sourceInfo = null) => {
                         const option = document.createElement('option');
                         option.value = isArchived ? `archived:${value}` : value;
                         option.textContent = text;
                         if (isArchived) {
                             option.dataset.isArchived = "true";
                         }
+                        if (sourceInfo) {
+                            option.dataset.hasLogs = sourceInfo.hasLogs;
+                            option.dataset.hasEvents = sourceInfo.hasEvents;
+                            option.dataset.sourceType = sourceInfo.sourceType;
+                        }
                         return option;
                     };
 
-                    let hasLivePods = false;
-                    if (livePodsData.pods && livePodsData.pods.length > 0) {
-                        hasLivePods = true;
+                    // Render unified sources
+                    if (unifiedSources.length > 0) {
+                        // Group sources by type
+                        const liveSourcesWithLogs = unifiedSources.filter(s => s.hasLogs && s.sourceType !== 'archived');
+                        const eventOnlySources = unifiedSources.filter(s => s.hasEvents && !s.hasLogs && s.sourceType !== 'archived');
+                        const archivedSources = unifiedSources.filter(s => s.sourceType === 'archived');
                         
-                        // Create a live pods group
-                        const liveGroup = document.createElement('optgroup');
-                        liveGroup.label = "Live Pods";
-
-                        // Create a Set to ensure uniqueness but now use detailed pod info
-                        const podMap = new Map();
-                        livePodsData.pods.forEach(podInfo => {
-                            podMap.set(podInfo.id, podInfo);
-                        });
-
-                        // If excludeSelf is unchecked and we have a current pod, ensure it's included
-                        if (!excludeSelf.checked && currentPodName && !podMap.has(currentPodName)) {
-                            // Add current pod with minimal info if not in the detailed list
-                            podMap.set(currentPodName, {
-                                id: currentPodName,
-                                health_status: 'unknown',
-                                last_log_time: null,
-                                type: 'pod'
+                        // Add live sources with logs
+                        if (liveSourcesWithLogs.length > 0) {
+                            const liveGroup = document.createElement('optgroup');
+                            liveGroup.label = viewMode === 'events' ? "Objects with Events" : "Live Pods";
+                            
+                            liveSourcesWithLogs.sort((a, b) => a.id.localeCompare(b.id)).forEach(source => {
+                                const optionText = formatUnifiedOptionText(source, maxPodLength, maxContainerLength, viewMode);
+                                const option = createOption(source.id, optionText, false, source);
+                                
+                                // Create tooltip based on what data is available
+                                let tooltipParts = [];
+                                if (source.hasLogs) tooltipParts.push('Has logs');
+                                if (source.hasEvents) tooltipParts.push(`${source.eventInfo?.event_count || 'some'} events`);
+                                if (source.health_reason) tooltipParts.push(source.health_reason);
+                                if (source.created_time) tooltipParts.push(`Created: ${new Date(source.created_time).toLocaleString()}`);
+                                
+                                option.title = tooltipParts.join(' | ') || 'No additional info';
+                                liveGroup.appendChild(option);
                             });
+                            
+                            podSelector.appendChild(liveGroup);
                         }
-
-                        // Sort pods by name and add to optgroup
-                        const sortedPods = Array.from(podMap.values()).sort((a, b) => a.id.localeCompare(b.id));
                         
-                        sortedPods.forEach(podInfo => {
-                            const optionText = formatOptionText(podInfo, maxPodLength, maxContainerLength);
-                            const option = createOption(podInfo.id, optionText);
-                            // Store pod info for tooltip or future use
-                            option.dataset.healthStatus = podInfo.health_status;
-                            option.dataset.healthReason = podInfo.health_reason || '';
-                            option.dataset.lastLogTime = podInfo.last_log_time || '';
-                            option.title = `${podInfo.health_reason || 'No additional info'} | Created: ${podInfo.created_time ? new Date(podInfo.created_time).toLocaleString() : 'Unknown'}`;
-                            liveGroup.appendChild(option);
-                        });
+                        // Add event-only sources (non-pod objects that only have events)
+                        if (eventOnlySources.length > 0 && viewMode === 'events') {
+                            const eventGroup = document.createElement('optgroup');
+                            eventGroup.label = "Event Sources (No Logs)";
+                            
+                            eventOnlySources.sort((a, b) => a.id.localeCompare(b.id)).forEach(source => {
+                                const optionText = formatUnifiedOptionText(source, maxPodLength, maxContainerLength, viewMode);
+                                const option = createOption(source.id, optionText, false, source);
+                                option.title = `${source.eventInfo?.event_count || 'some'} events | ${source.health_reason || 'Event source'}`;
+                                eventGroup.appendChild(option);
+                            });
+                            
+                            podSelector.appendChild(eventGroup);
+                        }
                         
-                        podSelector.appendChild(liveGroup);
-                    } else if (!excludeSelf.checked && currentPodName) {
-                        // If no pods from API but we have a current pod and excludeSelf is unchecked
-                        hasLivePods = true;
-                        const liveGroup = document.createElement('optgroup');
-                        liveGroup.label = "Live Pods";
-                        const paddedCurrentPod = currentPodName.padEnd(maxPodLength);
-                        const paddedCurrentContainer = "-".padEnd(maxContainerLength);
-                        const option = createOption(currentPodName, `${paddedCurrentPod} | ${paddedCurrentContainer} | ❓ | Unknown status`);
-                        option.title = "Current pod (limited info available)";
-                        liveGroup.appendChild(option);
-                        podSelector.appendChild(liveGroup);
-                    }
-
-                    let hasArchivedPods = false;
-                    if (archivedPodsData.archived_pods && archivedPodsData.archived_pods.length > 0) {
-                        // Filter out archived pods that have matching live pods
-                        const livePodNames = new Set(livePodsData.pods?.map(p => p.id) || []);
-                        const filteredArchivedPods = archivedPodsData.archived_pods.filter(
-                            podName => !livePodNames.has(podName)
-                        );
-
-                        if (filteredArchivedPods.length > 0) {
-                            hasArchivedPods = true;
+                        // Add archived sources
+                        if (archivedSources.length > 0 && viewMode === 'logs') {
                             const archivedGroup = document.createElement('optgroup');
                             archivedGroup.label = "Previous Pods";
-                            filteredArchivedPods.sort().forEach(podName => {
-                                const paddedArchivedPod = podName.padEnd(maxPodLength);
-                                const paddedArchivedContainer = "[ARCHIVED]".padEnd(maxContainerLength);
-                                const option = createOption(podName, `${paddedArchivedPod} | ${paddedArchivedContainer} | 📁 | -`, true);
+                            
+                            archivedSources.sort((a, b) => a.id.localeCompare(b.id)).forEach(source => {
+                                const optionText = formatUnifiedOptionText(source, maxPodLength, maxContainerLength, viewMode);
+                                const option = createOption(source.pod_name, optionText, true, source);
                                 option.title = "Archived pod logs";
                                 archivedGroup.appendChild(option);
                             });
+                            
                             podSelector.appendChild(archivedGroup);
                         }
-                    }
-
-                    if (!hasLivePods && !hasArchivedPods) {
-                        const headerPod = "Pod".padEnd(maxPodLength);
-                        const headerContainer = "Container".padEnd(maxContainerLength);
-                        const noPodsText = "No pods found".padEnd(maxPodLength);
-                        const noPodsContainer = "-".padEnd(maxContainerLength);
-                        podSelector.innerHTML = `
-                            <option value="" disabled style="font-weight: bold; color: #6b7280; background-color: #f9fafb;">── ${headerPod} | ${headerContainer} | Status | Last Log ──</option>
-                            <option value="all">${noPodsText} | ${noPodsContainer} | ❌ | -</option>
-                        `;
+                    } else {
+                        const noItemsText = (viewMode === 'events' ? "No event sources found" : "No pods found").padEnd(maxPodLength);
+                        const noItemsContainer = "-".padEnd(maxContainerLength);
+                        podSelector.innerHTML += `<option value="none">${noItemsText} | ${noItemsContainer} | ❌ | -</option>`;
                     }
 
                     // Try to restore previous selection
@@ -808,8 +1243,8 @@
                         podSelector.value = "all";
                     }
 
-                    // Refresh logs for the current selection
-                    fetchAndDisplayLogs();
+                    // Refresh data for the current selection
+                    fetchAndDisplayData();
                 } catch (error) {
                     // This catch is mainly for errors from /api/pods now
                     namespaceValue.textContent = 'Error loading';
@@ -829,6 +1264,80 @@
                 }
             }
 
+            async function fetchAndDisplayData() {
+                if (viewMode === 'logs') {
+                    return fetchAndDisplayLogs();
+                } else {
+                    return fetchAndDisplayEvents();
+                }
+            }
+
+            async function fetchAndDisplayEvents() {
+                const selectedOption = podSelector.options[podSelector.selectedIndex];
+                if (!selectedOption || !selectedOption.value) {
+                    logOutput.textContent = 'Please select an object to view events.';
+                    currentEvents = [];
+                    return;
+                }
+
+                const selectedValue = selectedOption.value;
+                loadingIndicator.classList.remove('hidden');
+                logOutput.textContent = '';
+
+                const params = new URLSearchParams({
+                    sort_order: sortOrder.value,
+                    limit: numLines.value,
+                    search_string: searchBox.value.trim(),
+                    case_sensitive: caseSensitive.toString(),
+                    exclude_self: excludeSelf.checked.toString(),
+                });
+
+                // Parse object selection for events
+                if (selectedValue !== 'all') {
+                    const [objectKind, objectName] = selectedValue.split('/');
+                    if (objectKind && objectName) {
+                        params.append('object_kind', objectKind);
+                        params.append('object_name', objectName);
+                    }
+                }
+
+                try {
+                    console.log('Fetching events with params:', params.toString());
+                    const data = await fetchFromServer(`/api/events?${params.toString()}`);
+                    console.log('Received event data:', data);
+                    if (!data.events) {
+                        console.error('No events array in response:', data);
+                        throw new Error('Invalid response format: missing events array');
+                    }
+                    currentEvents = data.events;
+                    currentLogs = []; // Clear logs when viewing events
+                    console.log('Setting currentEvents, length:', currentEvents.length);
+                    renderEvents();
+                } catch (error) {
+                    console.error('Error in fetchAndDisplayEvents:', error);
+                    currentEvents = [];
+                    
+                    let errorMessage = `Error loading events: ${error.message}`;
+                    if (error.retrySuggested) {
+                        errorMessage += ' (Retry recommended)';
+                    }
+                    errorDisplay.textContent = errorMessage;
+                    
+                    const errorEventEntry = {
+                        error: true,
+                        message: error.message,
+                        error_type: error.errorType || 'unknown_error',
+                        retry_suggested: error.retrySuggested !== false,
+                        last_timestamp: null,
+                        involved_object_name: selectedValue || 'unknown'
+                    };
+                    
+                    currentEvents = [errorEventEntry];
+                    renderEvents();
+                } finally {
+                    loadingIndicator.classList.add('hidden');
+                }
+            }
             async function fetchAndDisplayLogs() {
                 const selectedOption = podSelector.options[podSelector.selectedIndex];
                 if (!selectedOption || !selectedOption.value) {
@@ -869,6 +1378,7 @@
                         throw new Error('Invalid response format: missing logs array');
                     }
                     currentLogs = data.logs;
+                    currentEvents = []; // Clear events when viewing logs
                     console.log('Setting currentLogs, length:', currentLogs.length);
                     renderLogs();
                 } catch (error) {
@@ -921,23 +1431,9 @@
                 const fragment = document.createDocumentFragment();
                 const searchTerm = searchBox.value.trim(); // For search highlighting
 
-                // Define pod colors - using a mix of colors that work well in both light and dark modes
-                const podColors = [
-                    ['text-blue-600', 'dark:text-blue-400'],
-                    ['text-purple-600', 'dark:text-purple-400'],
-                    ['text-cyan-600', 'dark:text-cyan-400'],
-                    ['text-emerald-600', 'dark:text-emerald-400'],
-                    ['text-amber-600', 'dark:text-amber-400'],
-                    ['text-rose-600', 'dark:text-rose-400'],
-                    ['text-violet-600', 'dark:text-violet-400'],
-                    ['text-teal-600', 'dark:text-teal-400'],
-                    ['text-orange-600', 'dark:text-orange-400'],
-                    ['text-pink-600', 'dark:text-pink-400']
-                ];
-
-                // Create a map to assign consistent colors to pods
-                const podColorMap = new Map();
-                let colorIndex = 0;
+                // Use shared pod colors and color mapping
+                const { podColorMap, updateColorIndex } = getOrCreateColorMapping();
+                let colorIndex = globalColorIndex;
 
                 const logColoringRules = {
                     error: {
@@ -1046,6 +1542,143 @@
                 logOutput.appendChild(fragment);
             }
 
+            // --- Events Rendering ---
+            function renderEvents() {
+                console.log('Starting renderEvents, currentEvents length:', currentEvents.length);
+                logOutput.innerHTML = '';
+
+                if (!Array.isArray(currentEvents)) {
+                    console.error('currentEvents is not an array:', currentEvents);
+                    errorDisplay.textContent = 'Error: Invalid event data format';
+                    return;
+                }
+
+                if (currentEvents.length === 0) {
+                    logOutput.textContent = 'No events to display for the current selection.';
+                    if (searchBox.value.trim() && podSelector.value) {
+                         logOutput.textContent += `\nOr no events match your search term: "${searchBox.value.trim()}"`;
+                    }
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+                const searchTerm = searchBox.value.trim();
+
+                // Use shared pod colors and color mapping
+                const { podColorMap, updateColorIndex } = getOrCreateColorMapping();
+                let colorIndex = globalColorIndex;
+
+                // Define event type colors
+                const eventTypeColors = {
+                    'Warning': ['text-orange-600', 'dark:text-orange-400'],
+                    'Normal': ['text-blue-600', 'dark:text-blue-400'],
+                };
+
+                // Define event reason colors
+                const eventReasonColors = {
+                    'error': ['text-red-600', 'dark:text-red-400', 'font-semibold'],
+                    'failed': ['text-red-600', 'dark:text-red-400', 'font-semibold'],
+                    'killing': ['text-red-600', 'dark:text-red-400'],
+                    'created': ['text-green-600', 'dark:text-green-400'],
+                    'started': ['text-green-600', 'dark:text-green-400'],
+                    'pulled': ['text-green-600', 'dark:text-green-400'],
+                    'scheduled': ['text-blue-600', 'dark:text-blue-400'],
+                };
+
+                currentEvents.forEach(eventEntry => {
+                    const lineDiv = document.createElement('div');
+                    lineDiv.classList.add('log-line', 'py-0.5');
+                    
+                    // Handle error entries specially
+                    if (eventEntry.error) {
+                        lineDiv.classList.add('log-error');
+                        const errorDiv = document.createElement('div');
+                        errorDiv.innerHTML = eventEntry.message || 'Unknown error';
+                        
+                        if (eventEntry.retry_suggested !== false) {
+                            const retryButton = document.createElement('button');
+                            retryButton.textContent = 'Retry';
+                            retryButton.className = 'retry-button';
+                            retryButton.onclick = () => fetchAndDisplayData();
+                            errorDiv.appendChild(retryButton);
+                        }
+                        
+                        lineDiv.appendChild(errorDiv);
+                        fragment.appendChild(lineDiv);
+                        return;
+                    }
+
+                    // Event timestamp
+                    const timestampSpan = document.createElement('span');
+                    timestampSpan.classList.add('mr-3', 'text-gray-500', 'dark:text-gray-400', 'select-none');
+                    timestampSpan.textContent = formatTimestamp(eventEntry.last_timestamp || eventEntry.first_timestamp) + ' ';
+
+                    // Event type with color coding
+                    const typeSpan = document.createElement('span');
+                    const typeColors = eventTypeColors[eventEntry.type] || ['text-gray-600', 'dark:text-gray-400'];
+                    typeSpan.classList.add('mr-2', 'font-medium', ...typeColors);
+                    typeSpan.textContent = `[${eventEntry.type || 'Unknown'}]`;
+
+                    // Event reason with color coding
+                    const reasonSpan = document.createElement('span');
+                    const reasonLower = (eventEntry.reason || '').toLowerCase();
+                    let reasonColors = ['text-gray-700', 'dark:text-gray-300'];
+                    
+                    for (const [keyword, colors] of Object.entries(eventReasonColors)) {
+                        if (reasonLower.includes(keyword)) {
+                            reasonColors = colors;
+                            break;
+                        }
+                    }
+                    
+                    reasonSpan.classList.add('mr-2', 'font-medium', ...reasonColors);
+                    reasonSpan.textContent = `${eventEntry.reason || 'Unknown'}:`;
+
+                    // Object info (if viewing all events) - with unique colors per object
+                    if (podSelector.value === 'all' && eventEntry.involved_object_kind && eventEntry.involved_object_name) {
+                        const objectKey = `${eventEntry.involved_object_kind}/${eventEntry.involved_object_name}`;
+                        
+                        // Use the same color mapping logic as logs
+                        if (!podColorMap.has(objectKey)) {
+                            podColorMap.set(objectKey, podColors[colorIndex % podColors.length]);
+                            colorIndex++;
+                        }
+                        const objectColor = podColorMap.get(objectKey);
+
+                        const objectSpan = document.createElement('span');
+                        objectSpan.classList.add('mr-2', 'font-medium', ...objectColor);
+                        objectSpan.textContent = objectKey;
+                        lineDiv.appendChild(objectSpan);
+                    }
+
+                    // Event message
+                    const messageSpan = document.createElement('span');
+                    messageSpan.classList.add('event-message');
+
+                    let messageContent = eventEntry.message || 'No message';
+
+                    // Apply search highlighting
+                    if (searchTerm && highlightEnabled) {
+                        const searchFlags = caseSensitive ? 'g' : 'gi';
+                        const searchRegex = new RegExp(`(${escapeRegExp(searchTerm)})`, searchFlags);
+                        messageContent = messageContent.replace(searchRegex, '<mark>$1</mark>');
+                    }
+
+                    messageSpan.innerHTML = messageContent;
+
+                    lineDiv.appendChild(timestampSpan);
+                    lineDiv.appendChild(typeSpan);
+                    lineDiv.appendChild(reasonSpan);
+                    lineDiv.appendChild(messageSpan);
+                    fragment.appendChild(lineDiv);
+                });
+                
+                logOutput.appendChild(fragment);
+                
+                // Update the global color index
+                updateColorIndex(colorIndex);
+            }
+
             function escapeRegExp(string) {
                 return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             }
@@ -1083,32 +1716,46 @@
             podSelector.addEventListener('change', () => {
                 logOutput.textContent = '';
                 currentLogs = [];
+                currentEvents = [];
                 updateDownloadButtonStates();
-                fetchAndDisplayLogs();
+                fetchAndDisplayData();
             });
-            sortOrder.addEventListener('change', fetchAndDisplayLogs);
-            numLines.addEventListener('change', fetchAndDisplayLogs);
-            timestampType.addEventListener('change', renderLogs);
+            sortOrder.addEventListener('change', fetchAndDisplayData);
+            numLines.addEventListener('change', fetchAndDisplayData);
+            timestampType.addEventListener('change', () => {
+                if (viewMode === 'logs') {
+                    renderLogs();
+                } else {
+                    renderEvents();
+                }
+            });
 
             searchBox.addEventListener('keypress', (event) => {
                 if (event.key === 'Enter') {
                     event.preventDefault();
-                    fetchAndDisplayLogs();
+                    fetchAndDisplayData();
                 }
             });
 
             clearSearch.addEventListener('click', (event) => {
                 event.preventDefault();
                 searchBox.value = '';
-                fetchAndDisplayLogs();
+                fetchAndDisplayData();
             });
 
             refreshPods.addEventListener('click', (event) => {
                 event.preventDefault();
+                const currentSelection = podSelector.value; // Store current selection
                 loadingIndicator.classList.remove('hidden');
-                fetchPods().finally(() => {
-                    loadingIndicator.classList.add('hidden');
-                });
+                if (viewMode === 'logs') {
+                    fetchPodsAndRestoreSelection(currentSelection).finally(() => {
+                        loadingIndicator.classList.add('hidden');
+                    });
+                } else {
+                    fetchEventSourcesAndRestoreSelection(currentSelection).finally(() => {
+                        loadingIndicator.classList.add('hidden');
+                    });
+                }
             });
 
             // Settings menu toggle
@@ -1131,10 +1778,17 @@
 
             // Add event listener for excludeSelf checkbox
             excludeSelf.addEventListener('change', () => {
+                const currentSelection = podSelector.value; // Store current selection
                 loadingIndicator.classList.remove('hidden');
-                fetchPods().finally(() => {
-                    loadingIndicator.classList.add('hidden');
-                });
+                if (viewMode === 'logs') {
+                    fetchPodsAndRestoreSelection(currentSelection).finally(() => {
+                        loadingIndicator.classList.add('hidden');
+                    });
+                } else {
+                    fetchEventSourcesAndRestoreSelection(currentSelection).finally(() => {
+                        loadingIndicator.classList.add('hidden');
+                    });
+                }
             });
 
             // Download button event listeners
@@ -1242,7 +1896,7 @@
             }
 
             // Initial data fetch
-            fetchPods().then(() => {
+            fetchUnifiedSources().then(() => {
                 updateDownloadButtonStates();
             });
             fetchVersion();

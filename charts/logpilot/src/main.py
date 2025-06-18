@@ -20,6 +20,9 @@ from flask import (
 )
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 # --- Version Configuration ---
 __version__ = "0.7.0"
@@ -73,6 +76,62 @@ except config.ConfigException:
         # Here, we'll let it proceed, and API calls will fail if K8s client isn't configured.
 
 v1 = client.CoreV1Api()  # Kubernetes CoreV1API client
+
+
+# --- Kubernetes Events Classes ---
+@dataclass
+class KubernetesEvent:
+    """Represents a Kubernetes event with all relevant information."""
+
+    namespace: Optional[str]
+    involved_object_name: Optional[str]
+    involved_object_kind: Optional[str]
+    reason: Optional[str]
+    message: Optional[str]
+    first_timestamp: Optional[datetime]
+    last_timestamp: Optional[datetime]
+    api_version: Optional[str]
+    type: Optional[str]
+    count: Optional[int]
+    involved_object_uid: Optional[str]
+
+    @classmethod
+    def from_v1_event(cls, event: Any) -> "KubernetesEvent":
+        """Create a KubernetesEvent from a V1Event object."""
+        return cls(
+            namespace=event.metadata.namespace if event.metadata else None,
+            involved_object_name=(event.involved_object.name if event.involved_object else None),
+            involved_object_kind=(event.involved_object.kind if event.involved_object else None),
+            reason=event.reason,
+            message=event.message,
+            first_timestamp=event.first_timestamp,
+            last_timestamp=event.last_timestamp,
+            api_version=(event.involved_object.api_version if event.involved_object else None),
+            type=event.type,
+            count=event.count,
+            involved_object_uid=(
+                str(event.involved_object.uid)
+                if event.involved_object and hasattr(event.involved_object, "uid") and event.involved_object.uid
+                else None
+            ),
+        )
+
+    def to_dict(self) -> Dict:
+        """Convert the event to a dictionary."""
+        return {
+            "namespace": self.namespace,
+            "involved_object_name": self.involved_object_name,
+            "involved_object_kind": self.involved_object_kind,
+            "reason": self.reason,
+            "message": self.message,
+            "first_timestamp": (self.first_timestamp.isoformat() if self.first_timestamp else None),
+            "last_timestamp": (self.last_timestamp.isoformat() if self.last_timestamp else None),
+            "api_version": self.api_version,
+            "type": self.type,
+            "count": self.count,
+            "involved_object_uid": self.involved_object_uid,
+        }
+
 
 # Determine Kubernetes Namespace
 # Reads from 'K8S_NAMESPACE' environment variable, defaults to 'default'.
@@ -290,7 +349,7 @@ def convert_ansi_to_html(text):
 
     # Convert basic color codes to HTML spans
     for code, css_class in color_map.items():
-        text = re.sub(f"\x1b\[{code}m", f'<span class="{css_class}">', text)
+        text = re.sub(f"\x1b\\[{code}m", f'<span class="{css_class}">', text)
 
     # Handle reset codes
     text = re.sub(r"\x1B\[0m", "</span>", text)
@@ -1147,6 +1206,286 @@ def get_version():
     return jsonify({"version": __version__})
 
 
+# --- Events API Endpoints ---
+@retry_k8s_operation(max_retries=2, initial_delay=0.3)
+def _fetch_events_with_retry(namespace=None):
+    """Helper function to fetch events with retry logic."""
+    if namespace:
+        return v1.list_namespaced_event(namespace=namespace, watch=False, limit=500)
+    else:
+        return v1.list_event_for_all_namespaces(watch=False, limit=1000)
+
+
+def fetch_events(namespace: Optional[str] = None) -> List[KubernetesEvent]:
+    """Fetch Kubernetes events for the given namespace."""
+    try:
+        events_list_response = _fetch_events_with_retry(namespace)
+        return [KubernetesEvent.from_v1_event(event) for event in events_list_response.items]
+    except ApiException as e:
+        app.logger.error(f"Error fetching events (Kubernetes API): {e.status} - {e.reason}")
+        raise
+    except Exception as e:
+        app.logger.error(f"Unexpected error fetching events: {e}")
+        raise
+
+
+def filter_events(
+    events: List[KubernetesEvent],
+    kind_filter: Optional[str] = None,
+    type_filter: Optional[str] = None,
+    reason_filter: Optional[str] = None,
+    search_string: Optional[str] = None,
+    case_sensitive: bool = False,
+) -> List[KubernetesEvent]:
+    """Filter events based on various criteria."""
+    filtered_events = events
+
+    if kind_filter:
+        filtered_events = [
+            e
+            for e in filtered_events
+            if e.involved_object_kind and kind_filter.lower() in e.involved_object_kind.lower()
+        ]
+
+    if type_filter:
+        filtered_events = [e for e in filtered_events if e.type and type_filter.lower() in e.type.lower()]
+
+    if reason_filter:
+        filtered_events = [e for e in filtered_events if e.reason and reason_filter.lower() in e.reason.lower()]
+
+    if search_string:
+
+        def event_matches_search(event: KubernetesEvent) -> bool:
+            searchable_text = " ".join(
+                filter(None, [event.message, event.reason, event.involved_object_name, event.involved_object_kind])
+            )
+
+            if case_sensitive:
+                return search_string in searchable_text
+            else:
+                return search_string.lower() in searchable_text.lower()
+
+        filtered_events = [e for e in filtered_events if event_matches_search(e)]
+
+    return filtered_events
+
+
+@app.route("/api/events", methods=["GET"])
+@require_api_key
+def get_events():
+    """
+    API endpoint to fetch Kubernetes events.
+    Query Parameters:
+        - namespace (optional): Specific namespace, defaults to current namespace
+        - object_name (optional): Filter by involved object name
+        - object_kind (optional): Filter by involved object kind (Pod, Deployment, etc.)
+        - event_type (optional): Filter by event type (Normal, Warning)
+        - reason (optional): Filter by event reason
+        - search_string (optional): Search in event messages and other fields
+        - case_sensitive (optional, default 'false'): Case sensitive search
+        - sort_order (optional, default 'desc'): 'asc' (oldest first) or 'desc' (newest first)
+        - limit (optional, default '100'): Maximum number of events to return
+    """
+    global KUBE_NAMESPACE
+
+    # Get query parameters
+    namespace = request.args.get("namespace", KUBE_NAMESPACE)
+    object_name = request.args.get("object_name", "").strip()
+    object_kind = request.args.get("object_kind", "").strip()
+    event_type = request.args.get("event_type", "").strip()
+    reason = request.args.get("reason", "").strip()
+    search_string = request.args.get("search_string", "").strip()
+    case_sensitive = request.args.get("case_sensitive", "false").lower() == "true"
+    sort_order = request.args.get("sort_order", "desc").lower()
+    limit_str = request.args.get("limit", "100")
+
+    app.logger.info(
+        f"Request for /api/events: namespace='{namespace}', object_name='{object_name}', "
+        f"object_kind='{object_kind}', event_type='{event_type}', reason='{reason}', "
+        f"search='{search_string}', sort='{sort_order}', limit='{limit_str}'"
+    )
+
+    try:
+        limit = int(limit_str) if limit_str != "0" else None
+        if limit is not None and limit < 0:
+            return jsonify({"message": "limit must be non-negative or 0."}), 400
+    except ValueError:
+        return jsonify({"message": "Invalid number for limit."}), 400
+
+    try:
+        # Fetch events
+        events = fetch_events(namespace)
+
+        # Filter events
+        filtered_events = filter_events(
+            events,
+            kind_filter=object_kind if object_kind else None,
+            type_filter=event_type if event_type else None,
+            reason_filter=reason if reason else None,
+            search_string=search_string if search_string else None,
+            case_sensitive=case_sensitive,
+        )
+
+        # Additional object name filter
+        if object_name:
+            filtered_events = [
+                e
+                for e in filtered_events
+                if e.involved_object_name and (object_name.lower() in e.involved_object_name.lower())
+            ]
+
+        # Sort by timestamp
+        def get_sort_timestamp(event: KubernetesEvent) -> datetime:
+            timestamp = event.last_timestamp or event.first_timestamp
+            if timestamp is None:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            if timestamp.tzinfo is None:
+                return timestamp.replace(tzinfo=timezone.utc)
+            return timestamp
+
+        filtered_events.sort(key=get_sort_timestamp, reverse=(sort_order == "desc"))
+
+        # Apply limit
+        if limit is not None and limit > 0:
+            if sort_order == "desc":
+                filtered_events = filtered_events[:limit]
+            else:
+                filtered_events = filtered_events[-limit:]
+
+        # Convert to dict format for JSON response
+        events_data = [event.to_dict() for event in filtered_events]
+
+        return jsonify({"events": events_data, "namespace": namespace, "total_count": len(events_data)})
+
+    except ApiException as e:
+        app.logger.error(f"Kubernetes API error fetching events: {e.status} - {e.reason} - {e.body}")
+        error_message, status_code = format_k8s_error(e)
+        return jsonify(
+            {
+                "message": error_message,
+                "error_type": "kubernetes_api_error",
+                "retry_suggested": status_code >= 500 or status_code == 429,
+            }
+        ), status_code
+    except Exception as e:
+        app.logger.error(f"Unexpected error fetching events: {str(e)}", exc_info=True)
+        return jsonify(
+            {
+                "message": "An unexpected error occurred while fetching events",
+                "error_type": "internal_error",
+                "retry_suggested": False,
+            }
+        ), 500
+
+
+@app.route("/api/event_sources", methods=["GET"])
+@require_api_key
+def get_event_sources():
+    """
+    API endpoint to get available event sources (objects that have events).
+    Similar to /api/pods but for events.
+    Returns unique combinations of object kinds and names that have events.
+    """
+    global KUBE_NAMESPACE
+
+    namespace = request.args.get("namespace", KUBE_NAMESPACE)
+
+    try:
+        app.logger.info(f"Fetching events for namespace: {namespace}")
+        events = fetch_events(namespace)
+        app.logger.info(f"Retrieved {len(events)} events")
+
+        # Create unique sources from events
+        sources = {}  # key: "kind/name", value: {kind, name, event_count, latest_timestamp, latest_type}
+
+        for event in events:
+            try:
+                if not event.involved_object_kind or not event.involved_object_name:
+                    continue
+
+                key = f"{event.involved_object_kind}/{event.involved_object_name}"
+
+                if key not in sources:
+                    sources[key] = {
+                        "id": key,
+                        "object_kind": event.involved_object_kind,
+                        "object_name": event.involved_object_name,
+                        "event_count": 0,
+                        "latest_timestamp": None,
+                        "latest_event_type": None,
+                        "namespace": event.namespace,
+                    }
+
+                sources[key]["event_count"] += 1
+
+                # Update latest timestamp
+                event_timestamp = event.last_timestamp or event.first_timestamp
+                if event_timestamp:
+                    # Convert to datetime for comparison if latest_timestamp is a string
+                    latest_ts = sources[key]["latest_timestamp"]
+                    if latest_ts is None:
+                        should_update = True
+                    elif isinstance(latest_ts, str):
+                        # Convert ISO string back to datetime for comparison
+                        try:
+                            # Handle different ISO format variations
+                            if latest_ts.endswith('Z'):
+                                latest_ts_clean = latest_ts.replace('Z', '+00:00')
+                            elif '+' in latest_ts or latest_ts.endswith('UTC'):
+                                latest_ts_clean = latest_ts
+                            else:
+                                latest_ts_clean = latest_ts + '+00:00'
+                            
+                            latest_dt = datetime.fromisoformat(latest_ts_clean)
+                            
+                            # Ensure both timestamps are timezone-aware for comparison
+                            if event_timestamp.tzinfo is None:
+                                event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
+                            if latest_dt.tzinfo is None:
+                                latest_dt = latest_dt.replace(tzinfo=timezone.utc)
+                                
+                            should_update = event_timestamp > latest_dt
+                        except (ValueError, AttributeError) as e:
+                            app.logger.debug(f"Error parsing timestamp {latest_ts}: {e}")
+                            should_update = True
+                    else:
+                        should_update = event_timestamp > latest_ts
+                    
+                    if should_update:
+                        sources[key]["latest_timestamp"] = event_timestamp.isoformat()
+                        sources[key]["latest_event_type"] = event.type
+            except Exception as e:
+                app.logger.warning(f"Error processing event for object {event.involved_object_kind}/{event.involved_object_name}: {e}")
+                continue
+
+        # Convert to list and sort by latest timestamp
+        sources_list = list(sources.values())
+        sources_list.sort(key=lambda x: x["latest_timestamp"] or "0000-00-00T00:00:00Z", reverse=True)
+        
+        app.logger.info(f"Processed {len(sources_list)} unique event sources")
+        return jsonify({"sources": sources_list, "namespace": namespace})
+
+    except ApiException as e:
+        app.logger.error(f"Kubernetes API error fetching event sources: {e.status} - {e.reason}")
+        error_message, status_code = format_k8s_error(e)
+        return jsonify(
+            {
+                "message": error_message,
+                "error_type": "kubernetes_api_error",
+                "retry_suggested": status_code >= 500 or status_code == 429,
+            }
+        ), status_code
+    except Exception as e:
+        app.logger.error(f"Unexpected error fetching event sources: {str(e)}", exc_info=True)
+        return jsonify(
+            {
+                "message": "An unexpected error occurred while fetching event sources",
+                "error_type": "internal_error",
+                "retry_suggested": False,
+            }
+        ), 500
+
+
 @app.route("/api/download_log", methods=["GET"])
 @require_api_key
 def download_log():
@@ -1226,51 +1565,77 @@ def download_pod_logs():
     """
     API endpoint to download all logs for a specific pod as a zip file.
     Query Parameters:
-        - pod_name (required): The name of the pod.
+        - pod_name (required): The name of the pod to download logs for.
     """
-    global LOG_DIR, RETAIN_ALL_POD_LOGS
+    global KUBE_NAMESPACE, v1
 
     pod_name = request.args.get("pod_name")
 
     if not pod_name:
         return jsonify({"message": "Pod name is required"}), 400
 
-    if not RETAIN_ALL_POD_LOGS:
-        return jsonify({"message": "Archived logs are not enabled"}), 403
-
-    if not os.path.exists(LOG_DIR):
-        return jsonify({"message": "Log directory does not exist"}), 404
-
     try:
         # Create a temporary zip file
         with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip:
             temp_zip_path = temp_zip.name
 
-        # Create the zip file
+        # Get pod details to find all containers
+        try:
+            pod = v1.read_namespaced_pod(name=pod_name, namespace=KUBE_NAMESPACE)
+            containers = [container.name for container in pod.spec.containers]
+            init_containers = [container.name for container in (pod.spec.init_containers or [])]
+        except ApiException as e:
+            app.logger.error(f"Error getting pod details for {pod_name}: {e.status} - {e.reason}")
+            error_message, status_code = format_k8s_error(e)
+            return jsonify({"message": error_message}), status_code
+
+        # Create the zip file with all container logs
         with zipfile.ZipFile(temp_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            # Walk through the log directory and add all .log files for the specific pod
-            for root, _, files in os.walk(LOG_DIR):
-                for filename in files:
-                    if filename.endswith(".log"):
-                        file_path = os.path.join(root, filename)
-                        # Get relative path from LOG_DIR
-                        relative_path = os.path.relpath(file_path, LOG_DIR)
+            # Add init container logs
+            for init_container in init_containers:
+                try:
+                    log_data = v1.read_namespaced_pod_log(
+                        name=pod_name,
+                        namespace=KUBE_NAMESPACE,
+                        container=init_container,
+                        timestamps=True,
+                        follow=False,
+                        _preload_content=True,
+                    )
+                    zipf.writestr(f"{pod_name}_init-{init_container}.log", log_data)
+                except ApiException as e:
+                    app.logger.warning(f"Could not fetch logs for init container {init_container}: {e.reason}")
+                    zipf.writestr(f"{pod_name}_init-{init_container}_error.txt", f"Error fetching logs: {e.reason}")
 
-                        # Check if this file belongs to the specified pod
-                        # Files are either "pod/container.log" or "pod.log"
-                        if relative_path.startswith(f"{pod_name}/") or relative_path == f"{pod_name}.log":
-                            zipf.write(file_path, relative_path)
+            # Add regular container logs
+            for container in containers:
+                try:
+                    log_data = v1.read_namespaced_pod_log(
+                        name=pod_name,
+                        namespace=KUBE_NAMESPACE,
+                        container=container,
+                        timestamps=True,
+                        follow=False,
+                        _preload_content=True,
+                    )
+                    zipf.writestr(f"{pod_name}_{container}.log", log_data)
+                except ApiException as e:
+                    app.logger.warning(f"Could not fetch logs for container {container}: {e.reason}")
+                    zipf.writestr(f"{pod_name}_{container}_error.txt", f"Error fetching logs: {e.reason}")
 
-        # Check if any files were added to the zip
-        with zipfile.ZipFile(temp_zip_path, "r") as zipf:
-            if len(zipf.namelist()) == 0:
-                os.unlink(temp_zip_path)
-                return jsonify({"message": f"No logs found for pod {pod_name}"}), 404
+            # Also check for archived logs if enabled
+            if RETAIN_ALL_POD_LOGS and os.path.exists(LOG_DIR):
+                for root, _, files in os.walk(LOG_DIR):
+                    for filename in files:
+                        if filename.endswith(".log") and pod_name in filename:
+                            file_path = os.path.join(root, filename)
+                            # Get relative path from LOG_DIR for the zip archive
+                            arcname = f"archived_{os.path.relpath(file_path, LOG_DIR)}"
+                            zipf.write(file_path, arcname)
 
         from datetime import datetime
-
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"logpilot_{pod_name}_logs_{timestamp}.zip"
+        filename = f"{pod_name}_logs_{timestamp}.zip"
 
         return send_file(temp_zip_path, as_attachment=True, download_name=filename, mimetype="application/zip")
 
