@@ -313,6 +313,8 @@ def strip_ansi_codes(text):
     Remove ANSI escape sequences from text.
     This includes color codes, cursor movement, and other control sequences.
     """
+    if text is None:
+        return None
     # ANSI escape sequence pattern
     # Matches: ESC[ followed by parameter bytes (0x30-0x3F), then intermediate bytes (0x20-0x2F), then final byte (0x40-0x7E)
     ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")

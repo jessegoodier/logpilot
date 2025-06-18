@@ -435,7 +435,7 @@ def test_error_handling_and_retry_functionality(page: Page):
         # Wait for pods to load normally first
         try:
             page.wait_for_function("document.querySelector('#podSelector').options.length > 1", timeout=NAV_TIMEOUT)
-        except:
+        except Exception:
             print("No pods available for error testing - skipping error simulation tests")
             return
 
@@ -454,7 +454,7 @@ def test_error_handling_and_retry_functionality(page: Page):
                 loading_indicator = page.locator("#loadingIndicator")
                 try:
                     expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
-                except:
+                except Exception:
                     print("Loading indicator timeout - continuing with test")
 
                 # Check for error display in logs
@@ -495,7 +495,7 @@ def test_error_handling_and_retry_functionality(page: Page):
                             try:
                                 expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
                                 print("Retry functionality tested")
-                            except:
+                            except Exception:
                                 print("Retry completed (loading indicator check timed out)")
                         except Exception as e:
                             print(f"Retry button test failed: {e}")
@@ -513,7 +513,7 @@ def test_error_handling_and_retry_functionality(page: Page):
                 pod_selector.select_option(first_pod_value)
                 try:
                     expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
-                except:
+                except Exception:
                     print("Loading timeout for no-retry test - continuing")
 
                 # Check that error is displayed but without retry button
@@ -547,7 +547,7 @@ def test_error_handling_and_retry_functionality(page: Page):
         try:
             pod_selector.select_option(first_pod_value)
             expect(loading_indicator).to_be_hidden(timeout=LOG_LOAD_TIMEOUT)
-        except:
+        except Exception:
             print("Recovery test timeout - continuing")
 
         # Should now work normally (optional verification)
@@ -563,7 +563,7 @@ def test_error_handling_and_retry_functionality(page: Page):
                 timeout=LOG_LOAD_TIMEOUT,
             )
             print("Normal operation restored after error recovery")
-        except:
+        except Exception:
             print("Normal operation verification timed out - test still successful")
 
         print("Error handling and retry functionality test completed successfully.")
@@ -668,7 +668,7 @@ def test_ansi_css_and_styling_loaded(page: Page):
             # Close settings menu by clicking elsewhere or the button again
             try:
                 settings_button.click(timeout=2000)
-            except:
+            except Exception:
                 # If clicking settings button fails, click elsewhere to close menu
                 page.click("body", timeout=2000)
 
