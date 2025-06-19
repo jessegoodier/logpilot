@@ -197,17 +197,17 @@ class TestErrorDisplay:
         if light_theme_radio.is_visible():
             light_theme_radio.click()
 
-            # Check that body doesn't have dark class
-            body_classes = page.evaluate("document.body.className")
-            assert "dark" not in body_classes
+            # Check that html element doesn't have dark class
+            html_classes = page.evaluate("document.documentElement.className")
+            assert "dark" not in html_classes
 
         # Switch to dark theme
         if dark_theme_radio.is_visible():
             dark_theme_radio.click()
 
-            # Check that body has dark class
-            body_classes = page.evaluate("document.body.className")
-            assert "dark" in body_classes
+            # Check that html element has dark class
+            html_classes = page.evaluate("document.documentElement.className")
+            assert "dark" in html_classes
 
 
 class TestInteractiveFeatures:
