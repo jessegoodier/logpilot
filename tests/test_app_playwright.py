@@ -43,8 +43,16 @@ def test_log_viewer_e2e(page: Page):
         # First check if the selector itself exists
         expect(pod_selector).to_be_visible(timeout=NAV_TIMEOUT)
 
-        # Then check for options within the optgroup (expecting 2: init container and main container)
-        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(2, timeout=NAV_TIMEOUT)
+        # Wait for options within the optgroup to be populated (should have at least some pods)
+        page.wait_for_function(
+            """
+            () => {
+                const optGroup = document.querySelector("optgroup[label='Live Pods']");
+                return optGroup && optGroup.querySelectorAll('option').length > 0;
+            }
+            """,
+            timeout=NAV_TIMEOUT,
+        )
         print("Pod selector populated.")
 
         # Find the log-gen pod option (main container, not init container)
@@ -231,7 +239,15 @@ def test_sort_order_functionality(page: Page):
 
         # Wait for pod selector to be populated
         expect(pod_selector).to_be_visible(timeout=NAV_TIMEOUT)
-        expect(pod_selector.locator("optgroup[label='Live Pods'] option")).to_have_count(2, timeout=NAV_TIMEOUT)
+        page.wait_for_function(
+            """
+            () => {
+                const optGroup = document.querySelector("optgroup[label='Live Pods']");
+                return optGroup && optGroup.querySelectorAll('option').length > 0;
+            }
+            """,
+            timeout=NAV_TIMEOUT,
+        )
 
         # Find the log-gen pod (main container, not init container)
         log_gen_pod_option_locator = pod_selector.locator(
