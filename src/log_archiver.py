@@ -8,6 +8,9 @@ import requests
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 
+# Create logger for this module
+logger = logging.getLogger("log_archiver")
+
 
 def delete_old_logs(log_dir, max_age_minutes, logger):
     """
@@ -108,11 +111,11 @@ def get_pod_logs(v1, namespace, pod_name, container_name=None):
                 error_details = json.loads(e.body)
                 message = error_details.get("message", "").lower()
                 if ("waiting to start" in message or "containercreating" in message):
-                    logging.debug(f"Container {pod_name}/{container_name} not ready for log archival: {message}")
+                    logger.debug(f"Container {pod_name}/{container_name} not ready for log archival: {message}")
                     return None
             except json.JSONDecodeError:
                 pass
-        logging.error(f"Error fetching logs for pod {pod_name} container {container_name}: {e}")
+        logger.error(f"Error fetching logs for pod {pod_name} container {container_name}: {e}")
         return None
 
 
@@ -138,7 +141,7 @@ def archive_pod_logs(v1, namespace, pod_name, log_dir):
 
                 with open(log_path, "w") as f:
                     f.write(log_data)
-                logging.info(f"Archived logs for pod {pod_name} init container {container_name}")
+                logger.info(f"Archived logs for pod {pod_name} init container {container_name}")
 
         # Archive regular container logs
         for container in containers:
@@ -153,9 +156,9 @@ def archive_pod_logs(v1, namespace, pod_name, log_dir):
 
                 with open(log_path, "w") as f:
                     f.write(log_data)
-                logging.info(f"Archived logs for pod {pod_name} container {container_name}")
+                logger.info(f"Archived logs for pod {pod_name} container {container_name}")
     except ApiException as e:
-        logging.error(f"Error archiving logs for pod {pod_name}: {e}")
+        logger.error(f"Error archiving logs for pod {pod_name}: {e}")
 
 
 def get_log_dir_stats(log_dir):

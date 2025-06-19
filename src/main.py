@@ -42,11 +42,43 @@ log_session_cache = {}
 log_session_cache_lock = Lock()  # Thread-safe access to session cache
 
 # --- Logging Configuration ---
-# Basic logging to see Flask and K8s client interactions
-logging.basicConfig(level=logging.INFO)
-# Quieter Kubernetes client library logging for routine calls, unless debugging.
-logging.getLogger("kubernetes").setLevel(logging.WARNING)
-logging.getLogger("urllib3").setLevel(logging.WARNING)
+# Configure logging based on environment variables
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+DEBUG_APP = os.environ.get("DEBUG_APP", "false").lower() == "true"
+DEBUG_KUBERNETES = os.environ.get("DEBUG_KUBERNETES", "false").lower() == "true"
+DEBUG_ARCHIVER = os.environ.get("DEBUG_ARCHIVER", "false").lower() == "true"
+
+# Map string level to logging constant
+log_level_map = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL
+}
+
+# Set up basic logging configuration
+basic_level = log_level_map.get(LOG_LEVEL, logging.INFO)
+if DEBUG_APP:
+    basic_level = logging.DEBUG
+
+logging.basicConfig(
+    level=basic_level,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# Configure component-specific logging
+if DEBUG_KUBERNETES:
+    logging.getLogger("kubernetes").setLevel(logging.DEBUG)
+    logging.getLogger("urllib3").setLevel(logging.DEBUG)
+else:
+    # Quieter Kubernetes client library logging for routine calls
+    logging.getLogger("kubernetes").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+# Configure archiver logging
+if DEBUG_ARCHIVER:
+    logging.getLogger("log_archiver").setLevel(logging.DEBUG)
 
 
 # Add custom filter to prevent logging of /ready endpoint
