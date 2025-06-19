@@ -101,6 +101,17 @@ def get_pod_logs(v1, namespace, pod_name, container_name=None):
             _preload_content=True,
         )
     except ApiException as e:
+        # Reduce log noise for containers that aren't ready yet
+        if e.status == 400 and e.body:
+            try:
+                import json
+                error_details = json.loads(e.body)
+                message = error_details.get("message", "").lower()
+                if ("waiting to start" in message or "containercreating" in message):
+                    logging.debug(f"Container {pod_name}/{container_name} not ready for log archival: {message}")
+                    return None
+            except json.JSONDecodeError:
+                pass
         logging.error(f"Error fetching logs for pod {pod_name} container {container_name}: {e}")
         return None
 

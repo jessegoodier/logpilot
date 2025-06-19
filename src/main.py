@@ -469,8 +469,10 @@ def format_k8s_error(e):
                     "not found" in message.lower()
                     or "not ready" in message.lower()
                     or "containercreating" in message.lower()
+                    or "waiting to start" in message.lower()
+                    or "containerstarting" in message.lower()
                 ):
-                    return "Container is not ready yet", 400
+                    return "Container is not ready yet - waiting to start", 400
             except json.JSONDecodeError:
                 pass
         return f"Invalid request parameters: {error_message}", 400
@@ -735,7 +737,7 @@ def _list_pods_with_retry():
 
 
 @retry_k8s_operation(max_retries=2, initial_delay=0.3)
-def _fetch_pod_logs_with_retry(pod_name, container_name=None, tail_lines=None, since_time=None):
+def _fetch_pod_logs_with_retry(pod_name, container_name=None, tail_lines=None, since_seconds=None):
     """
     Helper function to fetch pod logs with retry logic and timestamp-based continuity.
 
@@ -743,7 +745,7 @@ def _fetch_pod_logs_with_retry(pod_name, container_name=None, tail_lines=None, s
         pod_name: Name of the pod
         container_name: Name of the container (optional)
         tail_lines: Number of lines to fetch from the end (optional)
-        since_time: RFC3339 timestamp to fetch logs from (optional)
+        since_seconds: Number of seconds back to fetch logs from (optional)
 
     Returns:
         str: Raw log data from Kubernetes API
@@ -759,10 +761,10 @@ def _fetch_pod_logs_with_retry(pod_name, container_name=None, tail_lines=None, s
     if container_name:
         kwargs["container"] = container_name
 
-    # Use since_time for temporal continuity, otherwise use tail_lines
-    if since_time:
-        kwargs["since_time"] = since_time
-        app.logger.debug(f"Fetching logs for {pod_name}/{container_name or 'main'} since {since_time}")
+    # Use since_seconds for temporal continuity, otherwise use tail_lines
+    if since_seconds is not None:
+        kwargs["since_seconds"] = since_seconds
+        app.logger.debug(f"Fetching logs for {pod_name}/{container_name or 'main'} since {since_seconds} seconds ago")
     elif tail_lines is not None:
         kwargs["tail_lines"] = tail_lines
         app.logger.debug(f"Fetching last {tail_lines} lines for {pod_name}/{container_name or 'main'}")
@@ -1240,9 +1242,36 @@ def fetch_container_logs_with_continuity(
         # Regular fetch: use standard buffer size
         tail_lines = 100 if not since_time else None
 
+    # Convert timestamp to seconds for Kubernetes API
+    since_seconds = None
+    if since_time:
+        try:
+            # Parse the timestamp and convert to seconds ago
+            from datetime import datetime, timezone
+            
+            # Try to parse ISO format timestamp
+            if since_time.endswith('Z'):
+                timestamp_str = since_time[:-1] + '+00:00'
+            else:
+                timestamp_str = since_time
+                
+            timestamp_dt = datetime.fromisoformat(timestamp_str)
+            if timestamp_dt.tzinfo is None:
+                timestamp_dt = timestamp_dt.replace(tzinfo=timezone.utc)
+            
+            current_time = datetime.now(timezone.utc)
+            time_diff = current_time - timestamp_dt
+            since_seconds = max(1, int(time_diff.total_seconds()))  # At least 1 second
+            
+            app.logger.debug(f"Converted timestamp {since_time} to {since_seconds} seconds ago")
+        except Exception as e:
+            app.logger.warning(f"Failed to parse timestamp {since_time}: {e}. Using tail_lines instead.")
+            since_seconds = None
+            tail_lines = 100  # Fallback to tail_lines
+
     # Fetch logs with temporal continuity
     log_data_stream = _fetch_pod_logs_with_retry(
-        pod_name=pod_name, container_name=k8s_container_name, since_time=since_time, tail_lines=tail_lines
+        pod_name=pod_name, container_name=k8s_container_name, since_seconds=since_seconds, tail_lines=tail_lines
     )
 
     raw_log_lines = log_data_stream.splitlines()
