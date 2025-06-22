@@ -19,15 +19,14 @@ This application is designed to only monitor logs of pods in the namespace it is
 
 ## Features
 
-- List pods in a namespace
 - View and search logs from selected pods
 - Sort logs (newest/oldest first)
-- Automatically select pod if only one is running
 - Highlight log levels (error, warning, info)
-- Light/dark theme toggle
-- Tailwind CSS for styling
-- Modern web UI
-- Flask for web server
+- Log archival for terminated pods (configurable retention period)
+- Multi-container pod support (including init containers)
+- API key authentication
+- Download logs functionality (individual containers or full pod archives)
+- Kubernetes events viewing with owner grouping
 
 ## Requirements
 
@@ -46,10 +45,12 @@ See the [readme](charts/README.md) in the helm chart for instructions.
 ### Option 2: Raw Kubernetes Manifests
 
 1. Create the configmap:
+
     ```sh
     kubectl create configmap logpilot \
       --from-file=src/main.py \
       --from-file=src/log_archiver.py \
+      --from-file=src/events.py \
       --from-file=src/index.html \
       --from-file=pyproject.toml \
       -n YOUR_NAMESPACE
@@ -88,7 +89,6 @@ When enabled:
 - The retention period can be configured via `MAX_LOG_RETENTION_MINUTES` environment variable
 - The deployment uses emptyDir for the logs directory, so logs are not persisted across pod restarts
 
-
 ## Contributing
 
 We welcome contributions! Please follow these guidelines when submitting a Pull Request:
@@ -98,12 +98,14 @@ We welcome contributions! Please follow these guidelines when submitting a Pull 
 3. Test your changes, consider using the [log-gen-deployment.yaml](tests/log-gen-deployment.yaml) to test the app
    1. Feel free to make better tests
 4. Run code formatting and linting:
+
    ```sh
-   # Format code with black
-   uvx black .
+   # Format code with ruff
+   uvx ruff format .
    # Run ruff linter
    uvx ruff check --fix .
    ```
+
 5. Commit your changes with a descriptive commit message
 6. Push to your branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
@@ -115,7 +117,6 @@ Pull Request Guidelines
 - Follow the existing code style
 - Use clear commit messages that describe the changes
 - Reference any related issues in your PR description
-
 
 ## Development
 
@@ -138,3 +139,5 @@ To run the tests:
 ```sh
 uv run pytest
 ```
+
+### :coffee: [Buy Me A Coffee](https://buymeacoffee.com/jessegoodier)
