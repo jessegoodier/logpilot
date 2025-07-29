@@ -17,6 +17,7 @@ on:
       - 'charts/logpilot/Chart.yaml'
   # Automatic trigger when version tags are created
   create:
+    # Trigger on tag creation
     tags:
       - 'v*'
 jobs:
@@ -24,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
+      id-token: write
     # Only run if triggered manually OR if this is a version bump on main
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -141,5 +144,5 @@ jobs:
         if: steps.check_release.outputs.skip != 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GH_PAGES_TOKEN || secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
