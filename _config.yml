@@ -1,0 +1,13 @@
+title: Logpilot
+description: Logpilot is a log management system that allows you to manage your logs in a centralized way.
+remote_theme: sharadcodes/jekyll-theme-serial-programmer
+plugins:
+- jekyll-remote-theme
+- jekyll-readme-index
+
+readme_index:
+  enabled: true
+  remove_originals: true
+
+markdown: kramdown
+highlighter: rouge
