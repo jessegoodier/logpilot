@@ -17,6 +17,7 @@ on:
       - 'charts/logpilot/Chart.yaml'
   # Automatic trigger when version tags are created
   create:
+    # Trigger on tag creation
     tags:
       - 'v*'
 jobs:
@@ -24,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
+      id-token: write
     # Only run if triggered manually OR if this is a version bump on main
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -137,19 +140,9 @@ jobs:
             ### Changes
             - Updated Helm chart version to match Python package version
             - Published new Helm chart release
-      - name: Deploy to gh-pages
+      - name: Deploy to GitHub Pages
         if: steps.check_release.outputs.skip != 'true'
-        run: |-
-          # Create gh-pages branch if it doesn't exist
-          git checkout --orphan gh-pages || git checkout gh-pages
-
-          # Remove all files except .git
-          git rm -rf . 2>/dev/null || true
-
-          # Copy index.yaml to root
-          cp dist/index.yaml .
-
-          # Commit and push
-          git add index.yaml
-          git commit -m "Update index.yaml for version v${{ steps.version.outputs.version }}"
-          git push -f origin gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GH_PAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
