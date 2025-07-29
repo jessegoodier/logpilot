@@ -1,3 +1,55 @@
-remote_theme: pages-themes/architect@v0.2.0
+# Basic site settings
+title: LogPilot Docs
+description: Documentation and examples
+url: "https://jessegoodier.github.io/logpilot"
+baseurl: "/"
+
+# GitHub Pages settings
+remote_theme: sharadcodes/jekyll-theme-serial-programmer
 plugins:
-- jekyll-remote-theme # add this line to the plugins list if you already have one
+- jekyll-remote-theme
+- jekyll-seo-tag
+- jekyll-feed
+- jekyll-sitemap
+
+# Optional: Configure SEO and social preview
+author:
+  name: Jesse Goodier
+
+# Google Analytics (optional)
+# google_analytics: G-XXXXXXXXXX
+
+# Theme options
+theme_config:
+  show_sidebar: true
+  show_dark_mode_toggle: true
+  show_copy_code_button: true
+  accent_color: "#ff7b72" # Optional, customize theme accent
+  markdown: kramdown
+
+# Navigation links (optional)
+nav:
+- title: Home
+  url: /
+- title: GitHub
+  url: https://github.com/jessegoodier/logpilot
+
+
+# Defaults for posts and pages
+defaults:
+- scope:
+    path: ""
+    type: "posts"
+  values:
+    layout: post
+- scope:
+    path: ""
+    type: "pages"
+  values:
+    layout: page
+
+# Markdown settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
