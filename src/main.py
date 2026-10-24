@@ -6,21 +6,12 @@ import tempfile
 import time
 import zipfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import wraps
 from html import escape
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from flask import (
-    Flask,
-    jsonify,
-    redirect,
-    render_template_string,
-    request,
-    send_file,
-    send_from_directory,
-    session,
-)
+from flask import Flask, jsonify, redirect, render_template_string, request, send_file, send_from_directory, session
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -83,20 +74,20 @@ v1 = client.CoreV1Api()  # Kubernetes CoreV1API client
 class KubernetesEvent:
     """Represents a Kubernetes event with all relevant information."""
 
-    namespace: Optional[str]
-    involved_object_name: Optional[str]
-    involved_object_kind: Optional[str]
-    reason: Optional[str]
-    message: Optional[str]
-    first_timestamp: Optional[datetime]
-    last_timestamp: Optional[datetime]
-    api_version: Optional[str]
-    type: Optional[str]
-    count: Optional[int]
-    involved_object_uid: Optional[str]
+    namespace: str | None
+    involved_object_name: str | None
+    involved_object_kind: str | None
+    reason: str | None
+    message: str | None
+    first_timestamp: datetime | None
+    last_timestamp: datetime | None
+    api_version: str | None
+    type: str | None
+    count: int | None
+    involved_object_uid: str | None
 
     @classmethod
-    def from_v1_event(cls, event: Any) -> "KubernetesEvent":
+    def from_v1_event(cls, event: Any) -> KubernetesEvent:
         """Create a KubernetesEvent from a V1Event object."""
         return cls(
             namespace=event.metadata.namespace if event.metadata else None,
@@ -116,7 +107,7 @@ class KubernetesEvent:
             ),
         )
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert the event to a dictionary."""
         return {
             "namespace": self.namespace,
@@ -275,7 +266,7 @@ def get_pod_health_status(pod):
         return {"status": "unknown", "reason": f"Unknown phase: {phase}"}
 
     except Exception as e:
-        return {"status": "error", "reason": f"Error getting status: {str(e)}"}
+        return {"status": "error", "reason": f"Error getting status: {e!s}"}
 
 
 def get_last_log_timestamp(pod_name, container_name=None):
@@ -659,7 +650,7 @@ def get_pods():
             }
         ), status_code
     except Exception as e:
-        app.logger.error(f"Unexpected error fetching pods: {str(e)}", exc_info=True)
+        app.logger.error(f"Unexpected error fetching pods: {e!s}", exc_info=True)
         return jsonify(
             {
                 "message": "An unexpected error occurred while fetching pod information",
@@ -902,7 +893,7 @@ def get_logs():
         ), status_code
     except Exception as e:
         app.logger.error(
-            f"Unexpected error processing logs for '{pod_name_req}': {str(e)}",
+            f"Unexpected error processing logs for '{pod_name_req}': {e!s}",
             exc_info=True,
         )
         return jsonify(
@@ -971,7 +962,7 @@ def get_archived_pods():
             app.logger.info(f"Found {len(archived_pod_names)} previous (non-running) pod/container logs in {LOG_DIR}.")
         except OSError as e:
             app.logger.error(f"Error listing previous pod logs directory {LOG_DIR}: {e}")
-            return jsonify({"message": f"Error accessing log archive: {str(e)}"}), 500
+            return jsonify({"message": f"Error accessing log archive: {e!s}"}), 500
     else:
         app.logger.info(f"Previous pod logs directory {LOG_DIR} does not exist.")
 
@@ -1069,10 +1060,10 @@ def get_archived_logs():
 
     except Exception as e:
         app.logger.error(
-            f"Unexpected error fetching archived logs for pod/container '{pod_name}': {str(e)}",
+            f"Unexpected error fetching archived logs for pod/container '{pod_name}': {e!s}",
             exc_info=True,
         )
-        return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
+        return jsonify({"message": f"An unexpected error occurred: {e!s}"}), 500
 
 
 @app.route("/api/logDirStats", methods=["GET"])
@@ -1144,8 +1135,8 @@ def get_log_dir_stats_endpoint():
         )
 
     except Exception as e:
-        app.logger.error(f"Error getting log directory stats: {str(e)}", exc_info=True)
-        return jsonify({"message": f"An unexpected error occurred: {str(e)}"}), 500
+        app.logger.error(f"Error getting log directory stats: {e!s}", exc_info=True)
+        return jsonify({"message": f"An unexpected error occurred: {e!s}"}), 500
 
 
 @app.route("/api/purgeCapability", methods=["GET"])
@@ -1195,8 +1186,8 @@ def purge_previous_logs():
             }
         )
     except Exception as e:
-        app.logger.error(f"Error purging previous pod logs: {str(e)}", exc_info=True)
-        return jsonify({"success": False, "message": f"An unexpected error occurred: {str(e)}"}), 500
+        app.logger.error(f"Error purging previous pod logs: {e!s}", exc_info=True)
+        return jsonify({"success": False, "message": f"An unexpected error occurred: {e!s}"}), 500
 
 
 @app.route("/api/version", methods=["GET"])
@@ -1218,7 +1209,7 @@ def _fetch_events_with_retry(namespace=None):
         return v1.list_event_for_all_namespaces(watch=False, limit=1000)
 
 
-def fetch_events(namespace: Optional[str] = None) -> List[KubernetesEvent]:
+def fetch_events(namespace: str | None = None) -> list[KubernetesEvent]:
     """Fetch Kubernetes events for the given namespace."""
     try:
         events_list_response = _fetch_events_with_retry(namespace)
@@ -1232,13 +1223,13 @@ def fetch_events(namespace: Optional[str] = None) -> List[KubernetesEvent]:
 
 
 def filter_events(
-    events: List[KubernetesEvent],
-    kind_filter: Optional[str] = None,
-    type_filter: Optional[str] = None,
-    reason_filter: Optional[str] = None,
-    search_string: Optional[str] = None,
+    events: list[KubernetesEvent],
+    kind_filter: str | None = None,
+    type_filter: str | None = None,
+    reason_filter: str | None = None,
+    search_string: str | None = None,
     case_sensitive: bool = False,
-) -> List[KubernetesEvent]:
+) -> list[KubernetesEvent]:
     """Filter events based on various criteria."""
     filtered_events = events
 
@@ -1340,9 +1331,9 @@ def get_events():
         def get_sort_timestamp(event: KubernetesEvent) -> datetime:
             timestamp = event.last_timestamp or event.first_timestamp
             if timestamp is None:
-                return datetime.min.replace(tzinfo=timezone.utc)
+                return datetime.min.replace(tzinfo=UTC)
             if timestamp.tzinfo is None:
-                return timestamp.replace(tzinfo=timezone.utc)
+                return timestamp.replace(tzinfo=UTC)
             return timestamp
 
         filtered_events.sort(key=get_sort_timestamp, reverse=(sort_order == "desc"))
@@ -1370,7 +1361,7 @@ def get_events():
             }
         ), status_code
     except Exception as e:
-        app.logger.error(f"Unexpected error fetching events: {str(e)}", exc_info=True)
+        app.logger.error(f"Unexpected error fetching events: {e!s}", exc_info=True)
         return jsonify(
             {
                 "message": "An unexpected error occurred while fetching events",
@@ -1442,9 +1433,9 @@ def get_event_sources():
 
                             # Ensure both timestamps are timezone-aware for comparison
                             if event_timestamp.tzinfo is None:
-                                event_timestamp = event_timestamp.replace(tzinfo=timezone.utc)
+                                event_timestamp = event_timestamp.replace(tzinfo=UTC)
                             if latest_dt.tzinfo is None:
-                                latest_dt = latest_dt.replace(tzinfo=timezone.utc)
+                                latest_dt = latest_dt.replace(tzinfo=UTC)
 
                             should_update = event_timestamp > latest_dt
                         except (ValueError, AttributeError) as e:
@@ -1480,7 +1471,7 @@ def get_event_sources():
             }
         ), status_code
     except Exception as e:
-        app.logger.error(f"Unexpected error fetching event sources: {str(e)}", exc_info=True)
+        app.logger.error(f"Unexpected error fetching event sources: {e!s}", exc_info=True)
         return jsonify(
             {
                 "message": "An unexpected error occurred while fetching event sources",
@@ -1559,8 +1550,8 @@ def download_log():
         error_message, status_code = format_k8s_error(e)
         return jsonify({"message": error_message}), status_code
     except Exception as e:
-        app.logger.error(f"Error downloading log for '{pod_name}': {str(e)}", exc_info=True)
-        return jsonify({"message": f"Error downloading log: {str(e)}"}), 500
+        app.logger.error(f"Error downloading log for '{pod_name}': {e!s}", exc_info=True)
+        return jsonify({"message": f"Error downloading log: {e!s}"}), 500
 
 
 @app.route("/api/download_pod_logs", methods=["GET"])
@@ -1645,8 +1636,8 @@ def download_pod_logs():
         return send_file(temp_zip_path, as_attachment=True, download_name=filename, mimetype="application/zip")
 
     except Exception as e:
-        app.logger.error(f"Error creating pod log archive for {pod_name}: {str(e)}", exc_info=True)
-        return jsonify({"message": f"Error creating pod log archive: {str(e)}"}), 500
+        app.logger.error(f"Error creating pod log archive for {pod_name}: {e!s}", exc_info=True)
+        return jsonify({"message": f"Error creating pod log archive: {e!s}"}), 500
 
 
 @app.route("/api/download_all_logs", methods=["GET"])
@@ -1690,8 +1681,8 @@ def download_all_logs():
         return send_file(temp_zip_path, as_attachment=True, download_name=filename, mimetype="application/zip")
 
     except Exception as e:
-        app.logger.error(f"Error creating log archive: {str(e)}", exc_info=True)
-        return jsonify({"message": f"Error creating log archive: {str(e)}"}), 500
+        app.logger.error(f"Error creating log archive: {e!s}", exc_info=True)
+        return jsonify({"message": f"Error creating log archive: {e!s}"}), 500
 
 
 # --- Main Execution ---

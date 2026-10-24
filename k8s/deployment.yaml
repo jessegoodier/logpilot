@@ -21,9 +21,14 @@ spec:
       terminationGracePeriodSeconds: 2
       containers:
       - name: logpilot-container
-        image: python:3.13-slim
+        image: python:3.14-slim
         command: ["/bin/sh", "-c"]
-        args: ["pip install -e /app --break-system-packages && python /app/main.py"]
+        args:
+          - |
+            set -e
+            pip install --break-system-packages uv
+            python -c "import tomllib, subprocess; deps = tomllib.load(open('/app/pyproject.toml', 'rb'))['project']['dependencies']; subprocess.check_call(['uv', 'pip', 'install', '--system', *deps])"
+            python /app/main.py
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5001

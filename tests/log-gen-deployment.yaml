@@ -36,11 +36,11 @@ spec:
       terminationGracePeriodSeconds: 1
       initContainers:
       - name: init-container
-        image: python:3.13-slim
+        image: python:3.14-slim
         command: ["python", "-c", "print('[INFO] Hello from init container!', flush=True)"]
       containers:
       - name: log-gen
-        image: python:3.13-slim
+        image: python:3.14-slim
         command: ["python", "/app/log-gen.py"]
         resources: {}
         volumeMounts:

@@ -8,8 +8,8 @@ import json
 import pytest
 import requests
 
-# Test configuration
-APP_BASE_URL = "http://localhost:5001"
+from tests.settings import APP_BASE_URL
+
 TEST_TIMEOUT = 30  # seconds
 
 
@@ -142,7 +142,7 @@ class TestLogProcessingIntegration:
                 assert "message" in log_entry
                 assert "pod_name" in log_entry
                 # timestamp can be None for some log entries
-                if "timestamp" in log_entry and log_entry["timestamp"]:
+                if log_entry.get("timestamp"):
                     # Should be ISO format timestamp
                     assert "T" in log_entry["timestamp"]
                     assert "Z" in log_entry["timestamp"]

@@ -3,8 +3,8 @@ import argparse
 import asyncio
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import kubernetes  # type: ignore
 import rich.box  # type: ignore
@@ -12,7 +12,10 @@ from kge import __version__
 
 # Prompt-toolkit imports
 from prompt_toolkit import Application  # type: ignore
-from prompt_toolkit.formatted_text import FormattedText, to_formatted_text  # type: ignore
+from prompt_toolkit.formatted_text import (
+    FormattedText,  # type: ignore
+    to_formatted_text,
+)
 from prompt_toolkit.key_binding import KeyBindings  # type: ignore
 from prompt_toolkit.layout import HSplit, Layout, Window  # type: ignore
 from prompt_toolkit.layout.controls import FormattedTextControl  # type: ignore
@@ -29,20 +32,20 @@ console = Console()
 class KubernetesEvent:
     """Represents a Kubernetes event with all relevant information."""
 
-    namespace: Optional[str]
-    involved_object_name: Optional[str]
-    involved_object_kind: Optional[str]
-    reason: Optional[str]
-    message: Optional[str]
-    first_timestamp: Optional[datetime]
-    last_timestamp: Optional[datetime]
-    api_version: Optional[str]  # API version of the involved_object
-    type: Optional[str]
-    count: Optional[int]
-    involved_object_uid: Optional[str]  # UID of the involved_object
+    namespace: str | None
+    involved_object_name: str | None
+    involved_object_kind: str | None
+    reason: str | None
+    message: str | None
+    first_timestamp: datetime | None
+    last_timestamp: datetime | None
+    api_version: str | None  # API version of the involved_object
+    type: str | None
+    count: int | None
+    involved_object_uid: str | None  # UID of the involved_object
 
     @classmethod
-    def from_v1_event(cls, event: Any) -> "KubernetesEvent":
+    def from_v1_event(cls, event: Any) -> KubernetesEvent:
         """Create a KubernetesEvent from a V1Event object."""
         return cls(
             namespace=event.metadata.namespace if event.metadata else None,
@@ -62,7 +65,7 @@ class KubernetesEvent:
             ),
         )
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert the event to a dictionary."""
         return {
             "namespace": self.namespace,
@@ -83,8 +86,8 @@ class KubernetesEventManager:
     """Manages Kubernetes events fetching and processing."""
 
     def __init__(self) -> None:
-        self._object_fetch_cache: Dict[Tuple, Optional[Any]] = {}  # Cache for fetched K8s objects
-        self._owner_resolution_cache: Dict[Tuple, Dict[str, str]] = {}  # Cache for resolved owners
+        self._object_fetch_cache: dict[tuple, Any | None] = {}  # Cache for fetched K8s objects
+        self._owner_resolution_cache: dict[tuple, dict[str, str]] = {}  # Cache for resolved owners
         self._init_kubernetes_client()
 
     def _init_kubernetes_client(self) -> None:
@@ -115,7 +118,7 @@ class KubernetesEventManager:
         self.apps_v1 = kubernetes.client.AppsV1Api()
         self.batch_v1 = kubernetes.client.BatchV1Api()
 
-    def _fetch_k8s_object(self, namespace: str, kind: str, name: str, api_version: Optional[str]) -> Optional[Any]:
+    def _fetch_k8s_object(self, namespace: str, kind: str, name: str, api_version: str | None) -> Any | None:
         cache_key = (namespace, kind, name, api_version)
         if cache_key in self._object_fetch_cache:
             return self._object_fetch_cache[cache_key]
@@ -149,7 +152,7 @@ class KubernetesEventManager:
 
     def _get_true_owner_recursive(
         self, namespace: str, owner_ref: Any, level: int = 0, max_level: int = 5
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         cache_key = (namespace, owner_ref.kind, owner_ref.name, str(owner_ref.uid))
         if cache_key in self._owner_resolution_cache:
             return self._owner_resolution_cache[cache_key]
@@ -185,9 +188,9 @@ class KubernetesEventManager:
             self._owner_resolution_cache[cache_key] = resolved_owner
             return resolved_owner
 
-    def group_events_by_owner(self, events: List[KubernetesEvent]) -> Dict[str, Dict[str, Any]]:
-        grouped_by_owner_uid: Dict[str, Dict[str, Any]] = {}
-        involved_to_final_owner_cache: Dict[Tuple, Dict[str, str]] = {}
+    def group_events_by_owner(self, events: list[KubernetesEvent]) -> dict[str, dict[str, Any]]:
+        grouped_by_owner_uid: dict[str, dict[str, Any]] = {}
+        involved_to_final_owner_cache: dict[tuple, dict[str, str]] = {}
 
         for event in events:
             if not event.involved_object_name or not event.involved_object_kind or not event.namespace:
@@ -202,7 +205,7 @@ class KubernetesEventManager:
                 event.involved_object_name,
                 involved_key_uid_part,
             )
-            effective_owner_info: Optional[Dict[str, str]] = None
+            effective_owner_info: dict[str, str] | None = None
 
             if involved_key in involved_to_final_owner_cache:
                 effective_owner_info = involved_to_final_owner_cache[involved_key]
@@ -246,9 +249,9 @@ class KubernetesEventManager:
             if owner_uid_str not in grouped_by_owner_uid:
                 initial_ts = event.last_timestamp or event.first_timestamp
                 initial_ts = (
-                    initial_ts.replace(tzinfo=timezone.utc)
+                    initial_ts.replace(tzinfo=UTC)
                     if initial_ts and initial_ts.tzinfo is None
-                    else (initial_ts or datetime.min.replace(tzinfo=timezone.utc))
+                    else (initial_ts or datetime.min.replace(tzinfo=UTC))
                 )
                 grouped_by_owner_uid[owner_uid_str] = {
                     "owner_info": effective_owner_info,
@@ -262,9 +265,7 @@ class KubernetesEventManager:
             current_event_ts = event.last_timestamp or event.first_timestamp
             if current_event_ts:
                 current_event_ts = (
-                    current_event_ts.replace(tzinfo=timezone.utc)
-                    if current_event_ts.tzinfo is None
-                    else current_event_ts
+                    current_event_ts.replace(tzinfo=UTC) if current_event_ts.tzinfo is None else current_event_ts
                 )
                 if current_event_ts > grouped_by_owner_uid[owner_uid_str]["latest_event_timestamp"]:
                     grouped_by_owner_uid[owner_uid_str]["latest_event_timestamp"] = current_event_ts
@@ -274,7 +275,7 @@ class KubernetesEventManager:
         for owner_data in grouped_by_owner_uid.values():
             owner_data["events"].sort(
                 key=lambda e: (
-                    (e.last_timestamp or e.first_timestamp or datetime.min).replace(tzinfo=timezone.utc)
+                    (e.last_timestamp or e.first_timestamp or datetime.min).replace(tzinfo=UTC)
                     if (e.last_timestamp or e.first_timestamp or datetime.min).tzinfo is None
                     else (e.last_timestamp or e.first_timestamp or datetime.min)
                 ),
@@ -282,7 +283,7 @@ class KubernetesEventManager:
             )
         return grouped_by_owner_uid
 
-    def fetch_events(self, namespace: Optional[str] = None) -> List[KubernetesEvent]:
+    def fetch_events(self, namespace: str | None = None) -> list[KubernetesEvent]:
         self._object_fetch_cache.clear()
         self._owner_resolution_cache.clear()
         try:
@@ -307,10 +308,10 @@ class KubernetesEventManager:
 
     def filter_events(
         self,
-        events: List[KubernetesEvent],
-        kind_filter: Optional[str] = None,
-        type_filter: Optional[str] = None,
-    ) -> List[KubernetesEvent]:
+        events: list[KubernetesEvent],
+        kind_filter: str | None = None,
+        type_filter: str | None = None,
+    ) -> list[KubernetesEvent]:
         filtered_events = events
         if kind_filter:
             filtered_events = [
@@ -324,7 +325,7 @@ class KubernetesEventManager:
 
     def display_events_table(
         self,
-        events: List[KubernetesEvent],
+        events: list[KubernetesEvent],
         show_timestamps: bool = False,
         show_all_namespaces: bool = False,
     ) -> None:
@@ -346,14 +347,14 @@ class KubernetesEventManager:
         table.add_column("Type/Involved Object", no_wrap=True)
         table.add_column("Message")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Ensure events are sorted for display; grouping already sorts them, but this is a safeguard
-        def ensure_aware(dt: Optional[datetime]) -> datetime:
+        def ensure_aware(dt: datetime | None) -> datetime:
             if dt is None:
-                return datetime.min.replace(tzinfo=timezone.utc)
+                return datetime.min.replace(tzinfo=UTC)
             if dt.tzinfo is None:
-                return dt.replace(tzinfo=timezone.utc)
+                return dt.replace(tzinfo=UTC)
             return dt
 
         sorted_events = sorted(
@@ -365,9 +366,7 @@ class KubernetesEventManager:
         for event in sorted_events:
             ts_to_format = event.last_timestamp or event.first_timestamp
             if ts_to_format:
-                ts_to_format = (
-                    ts_to_format.replace(tzinfo=timezone.utc) if ts_to_format.tzinfo is None else ts_to_format
-                )
+                ts_to_format = ts_to_format.replace(tzinfo=UTC) if ts_to_format.tzinfo is None else ts_to_format
             timestamp_str: str
             if show_timestamps or not ts_to_format:
                 timestamp_str = str(ts_to_format) if ts_to_format else "unknown time"
@@ -405,7 +404,7 @@ class KubernetesEventManager:
 class KubeEventsInteractiveSelector:
     def __init__(
         self,
-        grouped_data: Dict[str, Dict[str, Any]],
+        grouped_data: dict[str, dict[str, Any]],
         show_timestamps: bool = False,
         show_all_namespaces: bool = False,
     ):
@@ -418,13 +417,11 @@ class KubeEventsInteractiveSelector:
         self.show_all_namespaces = show_all_namespaces
         self.sorted_owner_uids = sorted(
             self.grouped_data.keys(),
-            key=lambda uid: (
-                self.grouped_data[uid]["latest_event_timestamp"] or datetime.min.replace(tzinfo=timezone.utc)
-            ),
+            key=lambda uid: self.grouped_data[uid]["latest_event_timestamp"] or datetime.min.replace(tzinfo=UTC),
             reverse=sort_reverse,
         )
         self.selected_index = 0
-        self.result_events: Optional[List[KubernetesEvent]] = None
+        self.result_events: list[KubernetesEvent] | None = None
 
         self.key_bindings = KeyBindings()
         self._setup_key_bindings()
@@ -439,13 +436,13 @@ class KubeEventsInteractiveSelector:
         }
         self.style = Style.from_dict(self.style_definitions)
 
-    def _format_relative_time(self, timestamp: Optional[datetime]) -> str:
+    def _format_relative_time(self, timestamp: datetime | None) -> str:
         if timestamp is None:
             return "unknown time"
-        ts_aware = timestamp.replace(tzinfo=timezone.utc) if timestamp.tzinfo is None else timestamp
+        ts_aware = timestamp.replace(tzinfo=UTC) if timestamp.tzinfo is None else timestamp
         if self.show_timestamps:
             return str(ts_aware)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         delta = now - ts_aware
         if delta.total_seconds() < 0:
             return "in future?"
@@ -597,7 +594,7 @@ class KubeEventsInteractiveSelector:
             self.result_events = None
             event.app.exit(None)
 
-    def run(self) -> Optional[List[KubernetesEvent]]:
+    def run(self) -> list[KubernetesEvent] | None:
         root_container = HSplit([Window(content=FormattedTextControl(self._get_list_content, show_cursor=False))])
 
         application = Application(
@@ -676,8 +673,8 @@ def main() -> None:
             print(kind)
         sys.exit(0)
 
-    event_manager_instance: Optional[KubernetesEventManager] = None
-    selected_owner_events_from_selector: Optional[List[KubernetesEvent]] = None
+    event_manager_instance: KubernetesEventManager | None = None
+    selected_owner_events_from_selector: list[KubernetesEvent] | None = None
 
     try:
         event_manager_instance = KubernetesEventManager()
@@ -703,7 +700,7 @@ def main() -> None:
                 namespace_arg = None
 
         console.print("[cyan]Loading events from Kubernetes...[/cyan]")
-        all_events: Optional[List[KubernetesEvent]] = asyncio.run(
+        all_events: list[KubernetesEvent] | None = asyncio.run(
             asyncio.to_thread(event_manager_instance.fetch_events, namespace_arg)
         )
         if not all_events:
