@@ -315,10 +315,21 @@ def test_sort_order_functionality(page: Page):
         # Verify that the order is different (unless there's only one log entry)
         if len(newest_first_timestamps) > 1 and len(oldest_first_timestamps) > 1:
             assert newest_first_timestamps != oldest_first_timestamps, "Sort order should change timestamps order"
-            # First timestamp in newest-first should be newer than first in oldest-first
-            assert newest_first_timestamps[0] >= oldest_first_timestamps[0], (
-                "Newest first should show newer logs at top"
-            )
+
+            # Relative labels like "0s ago" / "40s ago" are not lexicographically ordered;
+            # parse age so newest-first truly starts with a smaller age than oldest-first.
+            def relative_age_seconds(label: str) -> int:
+                match = re.match(r"(\d+)\s*([smhd])\s*ago", label.strip())
+                if not match:
+                    return -1
+                value = int(match.group(1))
+                unit = match.group(2)
+                return value * {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
+
+            newest_age = relative_age_seconds(newest_first_timestamps[0])
+            oldest_age = relative_age_seconds(oldest_first_timestamps[0])
+            assert newest_age >= 0 and oldest_age >= 0, "Expected relative timestamp labels"
+            assert newest_age <= oldest_age, "Newest first should show newer logs at top"
 
         # Test 3: Check if archived pods are available
         archived_pod_options = pod_selector.locator("optgroup[label='Previous Pods'] option")
