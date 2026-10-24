@@ -1,0 +1,20 @@
+tests/test_app_playwright.py
+  s_bfcc8d431e3f89::t_bfe7a147dea031 319-332
+  s_bfcc8d431e3f89::t_c050313f618988 318
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c824f0c845c453cf1c0c09983c09801fe7619c94",
+  "prompts": {},
+  "sessions": {
+    "s_bfcc8d431e3f89": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "41858147-2a20-4822-9a93-c4d69dc9600b",
+        "model": "default"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  }
+}
