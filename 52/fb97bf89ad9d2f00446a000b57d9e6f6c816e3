@@ -1,0 +1,21 @@
+charts/logpilot/src/main.py
+  s_bfcc8d431e3f89::t_2bf6b6fecd9c92 16-17,25-26
+src/main.py
+  s_bfcc8d431e3f89::t_2bf6b6fecd9c92 16-17,25-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "52fb97bf89ad9d2f00446a000b57d9e6f6c816e3",
+  "prompts": {},
+  "sessions": {
+    "s_bfcc8d431e3f89": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "41858147-2a20-4822-9a93-c4d69dc9600b",
+        "model": "default"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  }
+}
