@@ -6,10 +6,27 @@ Uses Playwright to test visual elements and user interactions.
 import pytest
 from playwright.sync_api import Page, expect
 
-# Test configuration
-APP_BASE_URL = "http://localhost:5001"
+from tests.settings import APP_BASE_URL
+
 NAV_TIMEOUT = 10000
 ACTION_TIMEOUT = 5000
+
+# Inline <style> rules are readable; CDN stylesheets (e.g. Tailwind) throw
+# SecurityError when reading cssRules cross-origin.
+_CSS_SELECTORS_JS = """
+() => {
+    return Array.from(document.styleSheets)
+        .flatMap(sheet => {
+            try {
+                return Array.from(sheet.cssRules);
+            } catch (e) {
+                return [];
+            }
+        })
+        .map(rule => rule.selectorText || '')
+        .join(' ');
+}
+"""
 
 
 class TestANSIRendering:
@@ -20,7 +37,7 @@ class TestANSIRendering:
         page.goto(APP_BASE_URL, timeout=NAV_TIMEOUT)
         page.wait_for_load_state("networkidle", timeout=NAV_TIMEOUT)
 
-        # Check that ANSI color classes exist in the document
+        styles = page.evaluate(_CSS_SELECTORS_JS)
         ansi_colors = [
             "ansi-red",
             "ansi-green",
@@ -36,55 +53,24 @@ class TestANSIRendering:
         ]
 
         for color_class in ansi_colors:
-            # Check if the CSS class exists by looking at computed styles
-            class_exists = page.evaluate(f"""
-                () => {{
-                    const styles = Array.from(document.styleSheets)
-                        .flatMap(sheet => Array.from(sheet.cssRules))
-                        .map(rule => rule.selectorText)
-                        .join(' ');
-                    return styles.includes('.{color_class}');
-                }}
-            """)
-            assert class_exists, f"ANSI color class .{color_class} not found in CSS"
+            assert f".{color_class}" in styles, f"ANSI color class .{color_class} not found in CSS"
 
     def test_error_styling_classes_present(self, page: Page):
         """Test that error styling classes are loaded."""
         page.goto(APP_BASE_URL, timeout=NAV_TIMEOUT)
         page.wait_for_load_state("networkidle", timeout=NAV_TIMEOUT)
 
-        # Check for error-related CSS classes
-        error_classes = ["log-error", "retry-button"]
-
-        for error_class in error_classes:
-            class_exists = page.evaluate(f"""
-                () => {{
-                    const styles = Array.from(document.styleSheets)
-                        .flatMap(sheet => Array.from(sheet.cssRules))
-                        .map(rule => rule.selectorText)
-                        .join(' ');
-                    return styles.includes('.{error_class}');
-                }}
-            """)
-            assert class_exists, f"Error styling class .{error_class} not found in CSS"
+        styles = page.evaluate(_CSS_SELECTORS_JS)
+        for error_class in ("log-error", "retry-button"):
+            assert f".{error_class}" in styles, f"Error styling class .{error_class} not found in CSS"
 
     def test_dark_mode_ansi_classes(self, page: Page):
         """Test that dark mode ANSI classes are present."""
         page.goto(APP_BASE_URL, timeout=NAV_TIMEOUT)
         page.wait_for_load_state("networkidle", timeout=NAV_TIMEOUT)
 
-        # Check for dark mode ANSI classes
-        dark_mode_exists = page.evaluate("""
-            () => {
-                const styles = Array.from(document.styleSheets)
-                    .flatMap(sheet => Array.from(sheet.cssRules))
-                    .map(rule => rule.selectorText)
-                    .join(' ');
-                return styles.includes('.dark .ansi-red') || 
-                       styles.includes('.dark .ansi-green');
-            }
-        """)
-        assert dark_mode_exists, "Dark mode ANSI classes not found"
+        styles = page.evaluate(_CSS_SELECTORS_JS)
+        assert ".dark .ansi-red" in styles or ".dark .ansi-green" in styles, "Dark mode ANSI classes not found"
 
 
 class TestErrorDisplay:

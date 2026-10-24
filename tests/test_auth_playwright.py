@@ -12,8 +12,8 @@ import os
 import pytest
 from playwright.sync_api import Page, expect
 
-# Test configuration
-APP_BASE_URL = "http://localhost:5001"
+from tests.settings import APP_BASE_URL
+
 TEST_API_KEY = "test-api-key-12345"
 INVALID_API_KEY = "invalid-key"
 NAV_TIMEOUT = 10000
@@ -183,7 +183,6 @@ def test_api_key_parameter_extraction():
     """Test that our JavaScript API key extraction logic works correctly."""
     # This could be a unit test for the frontend JS, but keeping it simple
     # The integration tests above cover the actual functionality
-    pass
 
 
 if __name__ == "__main__":

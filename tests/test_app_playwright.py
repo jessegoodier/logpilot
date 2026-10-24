@@ -5,8 +5,8 @@ import time
 import pytest
 from playwright.sync_api import Page, expect
 
-# Define the base URL of the application
-APP_BASE_URL = "http://localhost:5001"
+from tests.settings import APP_BASE_URL
+
 LOG_GEN_POD_NAME_PREFIX = "log-gen-deployment"  # Pod name from log-gen-deployment.yaml
 
 # Timeout for various operations (in milliseconds)
@@ -321,7 +321,7 @@ def test_sort_order_functionality(page: Page):
             )
 
         # Test 3: Check if archived pods are available
-        archived_pod_options = pod_selector.locator("optgroup[label='Archived Pods'] option")
+        archived_pod_options = pod_selector.locator("optgroup[label='Previous Pods'] option")
         archived_pod_count = archived_pod_options.count()
 
         if archived_pod_count > 0:
@@ -619,22 +619,23 @@ def test_ansi_css_and_styling_loaded(page: Page):
                     'ansi-red', 'ansi-green', 'ansi-blue', 'ansi-yellow',
                     'log-error', 'retry-button'
                 ];
-                
+
+                // Skip cross-origin sheets (e.g. Tailwind CDN) which throw SecurityError
                 const styles = Array.from(document.styleSheets)
                     .flatMap(sheet => {
                         try {
                             return Array.from(sheet.cssRules);
                         } catch (e) {
-                            return [];  // Handle CORS issues with external stylesheets
+                            return [];
                         }
                     })
                     .map(rule => rule.selectorText || '')
                     .join(' ');
-                
-                const foundClasses = requiredClasses.filter(className => 
+
+                const foundClasses = requiredClasses.filter(className =>
                     styles.includes('.' + className)
                 );
-                
+
                 return {
                     found: foundClasses,
                     missing: requiredClasses.filter(c => !foundClasses.includes(c)),
@@ -661,14 +662,13 @@ def test_ansi_css_and_styling_loaded(page: Page):
             settings_menu = page.locator("#settingsMenu")
             expect(settings_menu).to_be_visible(timeout=ACTION_TIMEOUT)
 
-            # Test dark mode
+            # Test dark mode (theme class is on <html>, not <body>)
             dark_theme_radio = page.locator("#themeDark")
             if dark_theme_radio.is_visible():
                 dark_theme_radio.click()
 
-                # Check that dark class is applied to body
-                body_has_dark = page.evaluate("document.body.classList.contains('dark')")
-                if body_has_dark:
+                html_has_dark = page.evaluate("document.documentElement.classList.contains('dark')")
+                if html_has_dark:
                     print("Dark mode successfully applied")
 
             # Test light mode
@@ -676,9 +676,8 @@ def test_ansi_css_and_styling_loaded(page: Page):
             if light_theme_radio.is_visible():
                 light_theme_radio.click()
 
-                # Check that dark class is removed from body
-                body_has_dark = page.evaluate("document.body.classList.contains('dark')")
-                if not body_has_dark:
+                html_has_dark = page.evaluate("document.documentElement.classList.contains('dark')")
+                if not html_has_dark:
                     print("Light mode successfully applied")
 
             # Close settings menu by clicking elsewhere or the button again

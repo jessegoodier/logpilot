@@ -21,22 +21,20 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           token: ${{ secrets.PAT_TOKEN }}
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
-          python-version: '3.12'
+          python-version: '3.14'
+          enable-cache: true
+          activate-environment: true
 
       - name: Install dependencies
-        run: |
-          python -m pip install uv --break-system-packages
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e '.[dev]'
+        run: uv sync --extra dev
 
       - name: Configure Git
         run: |
@@ -46,16 +44,14 @@ jobs:
       - name: Get current version
         id: current_version
         run: |
-          source .venv/bin/activate
-          current=$(bump-my-version show current_version)
+          current=$(uv run bump-my-version show current_version)
           echo "current=$current" >> $GITHUB_OUTPUT
           echo "Current version: $current"
 
       - name: Create version bump branch
         id: branch
         run: |
-          source .venv/bin/activate
-          new_version=$(bump-my-version show --increment ${{ inputs.version_type }} new_version)
+          new_version=$(uv run bump-my-version show --increment ${{ inputs.version_type }} new_version)
           branch_name="v$new_version"
           git checkout -b $branch_name
           echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
@@ -64,9 +60,8 @@ jobs:
 
       - name: Bump version in all files
         run: |
-          source .venv/bin/activate
           echo "Bumping version with type: ${{ inputs.version_type }}"
-          bump-my-version bump ${{ inputs.version_type }} --allow-dirty
+          uv run bump-my-version bump ${{ inputs.version_type }} --allow-dirty
           echo "Version bump completed"
 
       - name: Copy Python files to Helm chart
