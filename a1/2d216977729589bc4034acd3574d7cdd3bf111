@@ -1,0 +1,111 @@
+.github/workflows/e2e_test.yml
+  s_bfcc8d431e3f89::t_a581a0ef1ede26 31-32,35,37,70,72
+  s_bfcc8d431e3f89::t_7619ed70435711 24
+  s_bfcc8d431e3f89::t_93c0b313824d5c 38-39
+  h_cca6aa2712613d 28,41,109
+tests/log-gen-deployment.yaml
+  s_bfcc8d431e3f89::t_b6f6aad0529caf 39,43
+tests/settings.py
+  s_bfcc8d431e3f89::t_4c4625e6bc638d 1-5
+tests/conftest.py
+  s_bfcc8d431e3f89::t_951baaee107d51 3-4
+  s_bfcc8d431e3f89::t_ed0f5a80cf9005 5,12,14-17
+  s_bfcc8d431e3f89::t_9097deb07e4063 6-11,13,41-42,52,54-58,60,62,66
+  s_bfcc8d431e3f89::t_6ac47bf3ffbc32 2,18-28,53,59,61,63-65,67
+src/events.py
+  s_bfcc8d431e3f89::t_fe96511f9e46d8 15-18,35-45,48
+  s_bfcc8d431e3f89::t_dc20058fba003a 268,278,286,311-314,328,350,353,355,357,369,407,420
+  s_bfcc8d431e3f89::t_c4636a14ac0b29 6-7,68,89-90,121,155,191-193,208,252,254,424,439,442,445,597,676-677,703
+src/main.py
+  s_bfcc8d431e3f89::t_fe96511f9e46d8 14,77-87,90
+  s_bfcc8d431e3f89::t_142810ef8e50ff 9,12-13,110,269,653,896,965,1063,1066,1138-1139,1189-1190,1212,1226-1230,1232,1334,1336,1364,1436,1438,1474,1553-1554,1639-1640,1684-1685
+tests/test_auth_playwright.py
+  s_bfcc8d431e3f89::t_6c764e7605d8c4 15
+  s_bfcc8d431e3f89::t_d831ab960eb98a 16
+charts/logpilot/pyproject.toml
+  s_bfcc8d431e3f89::t_5f0a27a3cbc31a 5,29,33,36,38-40
+  s_bfcc8d431e3f89::t_a0b32802780247 6-10,17-25,28,35,37,93
+tests/test_ansi_css_static.py
+  s_bfcc8d431e3f89::t_f5373017e5f53e 1-30
+charts/logpilot/tests/deployment_test.yaml
+  s_bfcc8d431e3f89::t_6ae40dab2f86d7 17
+  s_bfcc8d431e3f89::t_d19304503ec4c4 34,42
+.github/workflows/version-bumper.yml
+  s_bfcc8d431e3f89::t_13762c68a053b8 29-30,33-34,37
+  s_bfcc8d431e3f89::t_2489be09a38a1d 32
+  s_bfcc8d431e3f89::t_948a1f195515fa 47,54,64
+  h_cca6aa2712613d 24
+charts/logpilot/src/events.py
+  s_bfcc8d431e3f89::t_4d9258ff1648b6 268,278,286,311-314,328,350,353,355,357,369,407,420
+  s_bfcc8d431e3f89::t_03e977bf365823 15-18,35-45,48
+  s_bfcc8d431e3f89::t_a80ceba407e99f 6-7,68,89-90,121,155,191-193,208,252,254,424,439,442,445,597,676-677,703
+tests/test_integration_ansi.py
+  s_bfcc8d431e3f89::t_76f17a9a585f9e 11
+  s_bfcc8d431e3f89::t_79cb0528d617fb 12
+  h_cca6aa2712613d 145
+charts/logpilot/templates/deployment.yaml
+  s_bfcc8d431e3f89::t_4197a988308188 39-42,44
+  s_bfcc8d431e3f89::t_8d1e5d3b75caeb 43
+charts/logpilot/values.yaml
+  s_bfcc8d431e3f89::t_f644e9d8b08f0d 33
+.github/workflows/helm-publisher.yml
+  s_bfcc8d431e3f89::t_8f401756aa428b 50
+  s_bfcc8d431e3f89::t_9af2c915d19787 48,51-52,60-61
+  s_bfcc8d431e3f89::t_e89bae71e05ae6 49
+  h_cca6aa2712613d 44,79,124,140
+pyproject.toml
+  s_bfcc8d431e3f89::t_38a9b169767200 10,33,36,38-40
+  s_bfcc8d431e3f89::t_0dec6055b4de1a 28,35,37,93
+  s_bfcc8d431e3f89::t_d144c0626965ba 29
+  h_cca6aa2712613d 5,7-9,17-25
+  s_bfcc8d431e3f89::t_4269c5029e6610 6
+k8s/deployment.yaml
+  s_bfcc8d431e3f89::t_1dce6f8e2ea746 26-29,31
+  s_bfcc8d431e3f89::t_768a66f0745353 24
+  s_bfcc8d431e3f89::t_b81451be129ef8 30
+tests/test_app_playwright.py
+  s_bfcc8d431e3f89::t_4fcf1a879299fb 8
+  s_bfcc8d431e3f89::t_1d674965c0e6a5 324
+  s_bfcc8d431e3f89::t_deaf6ecf2c5d57 622-623,629,634-635,638
+  s_bfcc8d431e3f89::t_6459f6c9829993 665,670-671,679-680
+  s_bfcc8d431e3f89::t_a9a23beb73d30d 9
+charts/logpilot/src/main.py
+  s_bfcc8d431e3f89::t_03e977bf365823 14,77-87,90
+  s_bfcc8d431e3f89::t_6c713665dec7df 9,12-13,110,269,653,896,965,1063,1066,1138-1139,1189-1190,1212,1226-1230,1232,1334,1336,1364,1436,1438,1474,1553-1554,1639-1640,1684-1685
+tests/test_frontend_ansi.py
+  s_bfcc8d431e3f89::t_59770989a9b9fe 10,14-30,40,56,63-65,72-73
+  s_bfcc8d431e3f89::t_359d424984ae52 9
+charts/logpilot/src/log_archiver.py
+  s_bfcc8d431e3f89::t_958a3a14c2dd58 5,22,32-33,41,49
+uv.lock
+  s_bfcc8d431e3f89::t_14d73d50904aca 2-136,140,142,144,149,153,155,157-166,180,182,184,189,193,202,204,209,211,213,218-307,312,314,316,330,332,334,339,349,351,355-356,358-392,397-439,444,446,448,461-462,466,468,470,474-475,478-480,482-486,488-493,495,500,502,504,509,511,513,518,520-543,569,572-573,576,581,585,587,593,615-626,632,637,639,644-717,729-832,835,837,839,844,846,848,853,860-867,872,874,876,881,886-965,970,978,980,985,990-1052,1057,1062,1065,1067,1072,1077,1079,1084,1086,1088,1093,1102,1104,1109,1116,1118,1123,1127,1129,1131,1136,1138,1140,1145,1150,1152,1157-1178,1183,1188,1190,1195,1203,1205,1223,1229,1231,1236,1240,1243,1245,1250,1252,1254,1259-1279,1302,1304,1306-1315,1320,1322,1324,1329,1334-1343,1345,1350,1352,1354,1359,1364,1366,1371-1402,1407,1409,1411,1416,1421,1423-1505
+.github/workflows/gh-pages.yml
+  h_cca6aa2712613d 14,17,35
+.github/workflows/helm-tester.yml
+  h_cca6aa2712613d 15,17,73
+scripts/run_tests.py
+  h_cca6aa2712613d 194,201
+src/log_archiver.py
+  h_cca6aa2712613d 5,22,32-33,41,49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a12d216977729589bc4034acd3574d7cdd3bf111",
+  "prompts": {},
+  "humans": {
+    "h_cca6aa2712613d": {
+      "author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  },
+  "sessions": {
+    "s_bfcc8d431e3f89": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "41858147-2a20-4822-9a93-c4d69dc9600b",
+        "model": "default"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  }
+}
