@@ -13,7 +13,8 @@ from html import escape
 from threading import Lock
 from typing import Any
 
-from flask import Flask, jsonify, redirect, render_template_string, request, send_file, send_from_directory, session
+from flask import (Flask, jsonify, redirect, render_template_string, request,
+                   send_file, send_from_directory, session)
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -21,7 +22,8 @@ from kubernetes.client.rest import ApiException
 __version__ = "0.8.2"
 
 # --- Log Archiver Imports ---
-from log_archiver import get_log_dir_stats, start_log_cleanup_job, watch_pods_and_archive
+from log_archiver import (get_log_dir_stats, start_log_cleanup_job,
+                          watch_pods_and_archive)
 
 # --- Flask App Setup ---
 app = Flask(__name__, static_folder=".", static_url_path="")  # Serve static files from current dir
