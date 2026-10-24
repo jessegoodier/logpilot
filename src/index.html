@@ -346,6 +346,8 @@
             let logSessionId = null;
             let logBuffer = new Map(); // Key: container_key, Value: {logs: [], lastUpdate: timestamp}
             let seenLineIds = new Set(); // Global set of seen line IDs for additional deduplication
+            // When true, next /api/logs call asks the server to drop continuity state and return a full tail
+            let pendingSessionReset = false;
 
             // Shared color mapping for consistent colors across logs and events
             let globalPodColorMap = new Map();
@@ -356,7 +358,17 @@
                 logSessionId = null;
                 logBuffer.clear();
                 seenLineIds.clear();
+                pendingSessionReset = true;
                 console.log('Log session reset');
+            }
+
+            function sortCurrentLogs() {
+                const descending = sortOrder.value === 'desc';
+                currentLogs.sort((a, b) => {
+                    const timeA = a.timestamp || '0000-00-00T00:00:00Z';
+                    const timeB = b.timestamp || '0000-00-00T00:00:00Z';
+                    return descending ? timeB.localeCompare(timeA) : timeA.localeCompare(timeB);
+                });
             }
             
             function addLogsToBuffer(containerKey, newLogs) {
@@ -368,10 +380,13 @@
                 let addedCount = 0;
                 
                 for (const log of newLogs) {
-                    // Additional client-side deduplication
-                    if (!seenLineIds.has(log.line_id)) {
+                    // Additional client-side deduplication (error entries may lack line_id)
+                    const lineId = log.line_id;
+                    if (!lineId || !seenLineIds.has(lineId)) {
                         buffer.logs.push(log);
-                        seenLineIds.add(log.line_id);
+                        if (lineId) {
+                            seenLineIds.add(lineId);
+                        }
                         addedCount++;
                     }
                 }
@@ -1573,6 +1588,22 @@
                     params.append('exclude_self', currentPodName);
                 }
 
+                const containerKey = actualPodName;
+                const bufferEmpty = !logBuffer.has(containerKey) ||
+                    (logBuffer.get(containerKey).logs.length === 0);
+
+                // Full tail when switching view / empty buffer; otherwise server continuity
+                // returns only new lines and the client buffer would look incomplete.
+                if (!isArchivedLog && (pendingSessionReset || bufferEmpty)) {
+                    params.append('reset_session', 'true');
+                    pendingSessionReset = false;
+                    if (bufferEmpty) {
+                        // Drop seen IDs from other views (e.g. "all") so a full refetch is kept
+                        seenLineIds.clear();
+                        logBuffer.delete(containerKey);
+                    }
+                }
+
                 const apiEndpoint = isArchivedLog ? '/api/archived_logs' : '/api/logs';
 
                 try {
@@ -1593,15 +1624,10 @@
                     }
 
                     // Add new logs to buffer (with deduplication)
-                    const containerKey = actualPodName;
                     const addedCount = addLogsToBuffer(containerKey, data.logs);
                     
-                    // Get buffered logs for this container (or all if viewing "all")
-                    if (actualPodName === 'all') {
-                        currentLogs = getBufferedLogs(); // Get all buffered logs
-                    } else {
-                        currentLogs = getBufferedLogs(containerKey);
-                    }
+                    currentLogs = getBufferedLogs(containerKey);
+                    sortCurrentLogs();
                     
                     currentEvents = []; // Clear events when viewing logs
                     console.log(`Setting currentLogs, total length: ${currentLogs.length}, new logs: ${addedCount}`);
@@ -1719,7 +1745,7 @@
                     }
 
                     const timestampSpan = document.createElement('span');
-                    timestampSpan.classList.add('mr-3', 'text-gray-500', 'dark:text-gray-400', 'select-none');
+                    timestampSpan.classList.add('timestamp', 'mr-3', 'text-gray-500', 'dark:text-gray-400', 'select-none');
                     timestampSpan.textContent = formatTimestamp(logEntry.timestamp) + ' ';
 
                     const messageSpan = document.createElement('span');
@@ -1943,11 +1969,23 @@
                 logOutput.textContent = '';
                 currentLogs = [];
                 currentEvents = [];
+                // New selection needs a full tail, not incremental continuity from prior view
+                resetLogSession();
                 updateDownloadButtonStates();
                 fetchAndDisplayData();
             });
-            sortOrder.addEventListener('change', fetchAndDisplayData);
-            numLines.addEventListener('change', fetchAndDisplayData);
+            sortOrder.addEventListener('change', () => {
+                if (viewMode === 'logs' && currentLogs.length > 0) {
+                    sortCurrentLogs();
+                    renderLogs();
+                } else {
+                    fetchAndDisplayData();
+                }
+            });
+            numLines.addEventListener('change', () => {
+                resetLogSession();
+                fetchAndDisplayData();
+            });
             timestampType.addEventListener('change', () => {
                 if (viewMode === 'logs') {
                     renderLogs();
@@ -1959,6 +1997,7 @@
             searchBox.addEventListener('keypress', (event) => {
                 if (event.key === 'Enter') {
                     event.preventDefault();
+                    resetLogSession();
                     fetchAndDisplayData();
                 }
             });
@@ -1966,6 +2005,7 @@
             clearSearch.addEventListener('click', (event) => {
                 event.preventDefault();
                 searchBox.value = '';
+                resetLogSession();
                 fetchAndDisplayData();
             });
 

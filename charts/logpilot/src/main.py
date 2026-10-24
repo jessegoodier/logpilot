@@ -11,10 +11,9 @@ from datetime import UTC, datetime
 from functools import wraps
 from html import escape
 from threading import Lock
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from flask import (Flask, jsonify, redirect, render_template_string, request,
-                   send_file, send_from_directory, session)
+from flask import Flask, jsonify, redirect, render_template_string, request, send_file, send_from_directory, session
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -22,8 +21,7 @@ from kubernetes.client.rest import ApiException
 __version__ = "0.8.2"
 
 # --- Log Archiver Imports ---
-from log_archiver import (get_log_dir_stats, start_log_cleanup_job,
-                          watch_pods_and_archive)
+from log_archiver import get_log_dir_stats, start_log_cleanup_job, watch_pods_and_archive
 
 # --- Flask App Setup ---
 app = Flask(__name__, static_folder=".", static_url_path="")  # Serve static files from current dir
@@ -538,11 +536,13 @@ def create_error_log_entry(pod_name, container_name, error_message, error_type="
     Returns:
         dict: Log entry with error information
     """
+    message = f"[{error_type.upper()}] {error_message}"
     return {
         "pod_name": pod_name,
         "container_name": container_name,
         "timestamp": None,
-        "message": f"[{error_type.upper()}] {error_message}",
+        "message": message,
+        "line_id": f"error:{pod_name}:{container_name}:{hash(message) & 0x7FFFFFFF}",
         "error": True,
         "error_type": error_type,
     }
@@ -574,9 +574,9 @@ def parse_log_line(line_str, strip_ansi=True):
         # If no timestamp is found at the beginning, return the whole line as the message.
         sanitized_line = sanitize_log_message(line_str.strip(), strip_ansi=strip_ansi)
         # Use current time and hash for lines without timestamps
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        current_time = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        current_time = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         line_id = f"{current_time}:{hash(sanitized_line) & 0x7FFFFFFF}"
         return {"timestamp": None, "message": sanitized_line, "line_id": line_id}
 
@@ -1057,11 +1057,11 @@ def fetch_container_logs_parallel(container_jobs):
                 # Handle other exceptions
                 pod_name = container_key.split("/")[0]
                 container_name = container_key.split("/")[-1]
-                app.logger.error(f"Unexpected error fetching logs from {container_key}: {str(e)}")
+                app.logger.error(f"Unexpected error fetching logs from {container_key}: {e!s}")
                 error_entry = create_error_log_entry(
                     pod_name=pod_name,
                     container_name=container_name,
-                    error_message=f"Unexpected error: {str(e)}",
+                    error_message=f"Unexpected error: {e!s}",
                     error_type="fetch_error",
                 )
                 all_logs.append(error_entry)
@@ -1269,7 +1269,7 @@ def fetch_container_logs_with_continuity(
     if since_time:
         try:
             # Parse the timestamp and convert to seconds ago
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             # Try to parse ISO format timestamp
             if since_time.endswith("Z"):
@@ -1279,9 +1279,9 @@ def fetch_container_logs_with_continuity(
 
             timestamp_dt = datetime.fromisoformat(timestamp_str)
             if timestamp_dt.tzinfo is None:
-                timestamp_dt = timestamp_dt.replace(tzinfo=timezone.utc)
+                timestamp_dt = timestamp_dt.replace(tzinfo=UTC)
 
-            current_time = datetime.now(timezone.utc)
+            current_time = datetime.now(UTC)
             time_diff = current_time - timestamp_dt
             since_seconds = max(1, int(time_diff.total_seconds()))  # At least 1 second
 
@@ -1389,7 +1389,7 @@ def get_log_continuity_stats():
             return jsonify(stats)
 
     except Exception as e:
-        app.logger.error(f"Error getting log continuity stats: {str(e)}")
+        app.logger.error(f"Error getting log continuity stats: {e!s}")
         return jsonify({"error": "Failed to get continuity stats", "message": str(e)}), 500
 
 
@@ -1426,7 +1426,7 @@ def log_health_check():
         except Exception as e:
             health_status["checks"]["kubernetes_api"] = {
                 "status": "error",
-                "message": f"Kubernetes API error: {str(e)}",
+                "message": f"Kubernetes API error: {e!s}",
             }
             health_status["overall_status"] = "unhealthy"
 
@@ -1454,7 +1454,7 @@ def log_health_check():
         except Exception as e:
             health_status["checks"]["log_archival"] = {
                 "status": "error",
-                "message": f"Log archival check failed: {str(e)}",
+                "message": f"Log archival check failed: {e!s}",
             }
 
         # Check 4: Memory usage estimation
@@ -1478,7 +1478,7 @@ def log_health_check():
                 "message": "psutil not available for memory monitoring",
             }
         except Exception as e:
-            health_status["checks"]["memory_usage"] = {"status": "error", "message": f"Memory check failed: {str(e)}"}
+            health_status["checks"]["memory_usage"] = {"status": "error", "message": f"Memory check failed: {e!s}"}
 
         # Set overall status based on individual checks
         error_checks = [check for check in health_status["checks"].values() if check["status"] == "error"]
@@ -1492,7 +1492,7 @@ def log_health_check():
         return jsonify(health_status)
 
     except Exception as e:
-        app.logger.error(f"Error performing health check: {str(e)}")
+        app.logger.error(f"Error performing health check: {e!s}")
         return jsonify(
             {
                 "overall_status": "error",
