@@ -2,7 +2,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import requests
 from kubernetes import client
@@ -22,7 +22,7 @@ def delete_old_logs(log_dir, max_age_minutes, logger):
         return
 
     logger.info(f"Starting cleanup of logs older than {max_age_minutes} minutes in {log_dir}...")
-    cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
+    cutoff_time = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
     deleted_count = 0
     error_count = 0
 
@@ -32,8 +32,8 @@ def delete_old_logs(log_dir, max_age_minutes, logger):
             try:
                 # Get both creation and modification times
                 file_stats = os.stat(file_path)
-                file_creation_time = datetime.fromtimestamp(file_stats.st_ctime, timezone.utc)
-                file_mod_time = datetime.fromtimestamp(file_stats.st_mtime, timezone.utc)
+                file_creation_time = datetime.fromtimestamp(file_stats.st_ctime, UTC)
+                file_mod_time = datetime.fromtimestamp(file_stats.st_mtime, UTC)
 
                 if file_creation_time < cutoff_time:
                     os.remove(file_path)
@@ -41,7 +41,7 @@ def delete_old_logs(log_dir, max_age_minutes, logger):
                         f"Deleted old log file: {file_path}\n"
                         f"  Created: {file_creation_time}\n"
                         f"  Last Modified: {file_mod_time}\n"
-                        f"  Age: {(datetime.now(timezone.utc) - file_creation_time).total_seconds() / 60:.1f} minutes"
+                        f"  Age: {(datetime.now(UTC) - file_creation_time).total_seconds() / 60:.1f} minutes"
                     )
                     deleted_count += 1
                 else:
@@ -49,7 +49,7 @@ def delete_old_logs(log_dir, max_age_minutes, logger):
                         f"Keeping log file: {file_path}\n"
                         f"  Created: {file_creation_time}\n"
                         f"  Last Modified: {file_mod_time}\n"
-                        f"  Age: {(datetime.now(timezone.utc) - file_creation_time).total_seconds() / 60:.1f} minutes"
+                        f"  Age: {(datetime.now(UTC) - file_creation_time).total_seconds() / 60:.1f} minutes"
                     )
             except OSError as e:
                 logger.error(f"Error deleting file {file_path}: {e}")

@@ -36,7 +36,12 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         command: ["/bin/sh", "-c"]
-        args: ["pip install -e /app --break-system-packages && python /app/main.py"]
+        args:
+          - |
+            set -e
+            pip install --break-system-packages uv
+            python -c "import tomllib, subprocess; deps = tomllib.load(open('/app/pyproject.toml', 'rb'))['project']['dependencies']; subprocess.check_call(['uv', 'pip', 'install', '--system', *deps])"
+            python /app/main.py
         ports:
         - name: http
           containerPort: {{ .Values.service.port }}

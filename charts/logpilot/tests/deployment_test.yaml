@@ -14,7 +14,7 @@ tests:
           value: 1
       - equal:
           path: spec.template.spec.containers[0].image
-          value: "python:3.13-slim"
+          value: "python:3.14-slim"
       - equal:
           path: spec.template.spec.containers[0].env[0].name
           value: "APP_VERSION"
@@ -31,7 +31,7 @@ tests:
   - it: should render deployment with custom values
     set:
       replicaCount: 2
-      image.tag: "3.12-slim"
+      image.tag: "3.14-alpine"
       previousPodLogs.enabled: false
     asserts:
       - equal:
@@ -39,7 +39,7 @@ tests:
           value: 2
       - equal:
           path: spec.template.spec.containers[0].image
-          value: "python:3.12-slim"
+          value: "python:3.14-alpine"
       - equal:
           path: spec.template.spec.containers[0].env[1].value
           value: "false"

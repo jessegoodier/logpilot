@@ -6,7 +6,6 @@ log message sanitization, and enhanced error handling.
 
 import json
 import os
-
 # Import the functions we want to test
 import sys
 from unittest.mock import Mock
@@ -191,7 +190,7 @@ class TestErrorHandling:
 
         message, status = format_k8s_error(error)
         assert status == 400
-        assert message == "Container is not ready yet"
+        assert message == "Container is not ready yet - waiting to start"
 
     def test_format_k8s_error_401_unauthorized(self):
         """Test formatting of 401 Unauthorized errors."""
@@ -435,7 +434,7 @@ class TestIntegrationScenarios:
 
         message, status = format_k8s_error(error)
         assert status == 400
-        assert message == "Container is not ready yet"
+        assert message == "Container is not ready yet - waiting to start"
 
     def test_comprehensive_error_log_entry_creation(self):
         """Test creating error log entries for various scenarios."""
