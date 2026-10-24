@@ -1,0 +1,34 @@
+src/index.html
+  s_bfcc8d431e3f89::t_d34db7643ac160 1629
+  s_bfcc8d431e3f89::t_ca0d6f2f9a834a 349-350,361,364-371
+  s_bfcc8d431e3f89::t_980e2dfec8067a 383-385,387-389
+  s_bfcc8d431e3f89::t_933b205784aea8 1591-1606,1630
+  s_bfcc8d431e3f89::t_14464a74e8cddc 1748
+  s_bfcc8d431e3f89::t_7801172bfba339 1972-1973,1977-1988,2000,2008
+  s_bfcc8d431e3f89::t_6f1d2d04e7056f 372
+charts/logpilot/src/index.html
+  s_bfcc8d431e3f89::t_8bb596b6785605 349-350,361,364-372,383-385,387-389,1591-1606,1629-1630,1748,1972-1973,1977-1988,2000,2008
+charts/logpilot/src/main.py
+  s_bfcc8d431e3f89::t_7e840114d4f4c6 545
+  s_bfcc8d431e3f89::t_8bb596b6785605 14,16,24,539,544,577,579,1060,1064,1272,1282,1284,1392,1429,1457,1481,1495
+src/main.py
+  s_bfcc8d431e3f89::t_8f5b5d27c3b085 539,544
+  s_bfcc8d431e3f89::t_5fecf92f54bf95 545
+  s_bfcc8d431e3f89::t_4ead9b15b33c93 14,16,24,577,579,1060,1064,1272,1282,1284,1392,1429,1457,1481,1495
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6f397d282b079e9b6e3c79accf909199981ba20c",
+  "prompts": {},
+  "sessions": {
+    "s_bfcc8d431e3f89": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "41858147-2a20-4822-9a93-c4d69dc9600b",
+        "model": "default"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  }
+}
