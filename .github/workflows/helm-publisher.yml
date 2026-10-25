@@ -78,11 +78,14 @@ jobs:
         if: steps.check_release.outputs.skip != 'true'
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
-          version: '3.17.3'
+          version: '3.22.1'
       - name: Install helm-unittest plugin
         if: steps.check_release.outputs.skip != 'true'
         run: |
-          helm plugin install https://github.com/helm-unittest/helm-unittest
+          # Unpinned installs track latest. helm-unittest 1.1+ plugin.yaml uses
+          # platformHooks, which Helm 3.17 cannot load (the 3.17.3 publisher failed
+          # with "unknown field platformHooks"). 3.22 supports that field.
+          helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.2.1
       - name: Create dist directory
         if: steps.check_release.outputs.skip != 'true'
         run: mkdir -p dist
@@ -141,3 +144,6 @@ jobs:
         with:
           github_token: ${{ secrets.GH_PAGES_TOKEN || secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
+          # gh-pages also hosts the docs site. Replacing the branch would
+          # delete it and leave only the chart index.
+          keep_files: true
