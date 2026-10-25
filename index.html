@@ -1,0 +1,162 @@
+<h1 id="logpilot---kubernetes-pod-log-viewer">logPilot - Kubernetes Pod Log Viewer<!-- omit in toc --></h1>
+
+<p>A simple Kubernetes pod log viewer web app.</p>
+
+<p>Give direct log access to your software engineers to see the logs without giving them access to the kubeconfig or other centralized log tools.</p>
+
+<p>This application is designed to only monitor logs of pods in the namespace it is deployed to. It can be easily adapted to view all pods in the cluster, but it may not scale well in larger environments.</p>
+
+<p><img src="logpilot.png" alt="screenshot" /></p>
+
+<h2 id="table-of-contents">Table of Contents<!-- omit in toc --></h2>
+
+<ul>
+  <li><a href="#features">Features</a></li>
+  <li><a href="#requirements">Requirements</a></li>
+  <li><a href="#deploying">Deploying</a>
+    <ul>
+      <li><a href="#previous-pod-logs">Previous Pod Logs</a></li>
+    </ul>
+  </li>
+  <li><a href="#contributing">Contributing</a></li>
+  <li><a href="#development">Development</a></li>
+</ul>
+
+<h2 id="features">Features</h2>
+
+<ul>
+  <li>View and search logs from selected pods</li>
+  <li>Sort logs (newest/oldest first)</li>
+  <li>Highlight log levels (error, warning, info)</li>
+  <li>Log archival for terminated pods (configurable retention period)</li>
+  <li>Multi-container pod support (including init containers)</li>
+  <li>API key authentication</li>
+  <li>Download logs functionality (individual containers or full pod archives)</li>
+  <li>Kubernetes events viewing with owner grouping</li>
+</ul>
+
+<h2 id="requirements">Requirements</h2>
+
+<ul>
+  <li>Python 3.12+</li>
+  <li><a href="https://flask.palletsprojects.com/">Flask</a></li>
+  <li><a href="https://github.com/kubernetes-client/python">kubernetes</a></li>
+</ul>
+
+<h2 id="deploying">Deploying</h2>
+
+<h3 id="option-1-helm-chart-recommended">Option 1: Helm Chart (Recommended)</h3>
+
+<p>Helm allows you to easily install and customize the settings.</p>
+
+<p>See the <a href="charts/README.md">readme</a> in the helm chart for instructions.</p>
+
+<h3 id="option-2-raw-kubernetes-manifests">Option 2: Raw Kubernetes Manifests</h3>
+
+<ol>
+  <li>
+    <p>Create the configmap:</p>
+
+    <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code> kubectl create configmap logpilot <span class="se">\</span>
+   <span class="nt">--from-file</span><span class="o">=</span>src/main.py <span class="se">\</span>
+   <span class="nt">--from-file</span><span class="o">=</span>src/log_archiver.py <span class="se">\</span>
+   <span class="nt">--from-file</span><span class="o">=</span>src/events.py <span class="se">\</span>
+   <span class="nt">--from-file</span><span class="o">=</span>src/index.html <span class="se">\</span>
+   <span class="nt">--from-file</span><span class="o">=</span>pyproject.toml <span class="se">\</span>
+   <span class="nt">-n</span> YOUR_NAMESPACE
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Apply the main manifest:
+Modify <a href="k8s/deployment.yaml">the app config</a>. See comments on the API key usage.</p>
+
+    <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code> kubectl apply <span class="nt">-f</span> k8s/ <span class="nt">-n</span> YOUR_NAMESPACE
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Port-forward to the service:</p>
+
+    <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code> kubectl port-forward <span class="nt">-n</span> YOUR_NAMESPACE svc/logpilot-service 5001:5001
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<p>The API key is designed to simply protect the UI from random users. Please use a VPN or other means to protect the app in sensitive environments.</p>
+
+<p>When using an API key, you embed the key in the URL: <code class="language-plaintext highlighter-rouge">http://localhost:5001/?api_key=your-api-key</code></p>
+
+<h3 id="previous-pod-logs">Previous Pod Logs</h3>
+
+<p>By default, this application stores logs for all pods in the namespace it is deployed to for 7 days.</p>
+
+<p>This is configurable by setting the <code class="language-plaintext highlighter-rouge">MAX_LOG_RETENTION_MINUTES</code> environment variable in the deployment configuration.</p>
+
+<p>Or disable it by setting <code class="language-plaintext highlighter-rouge">RETAIN_ALL_POD_LOGS=false</code> in the deployment configuration.</p>
+
+<p>When enabled:</p>
+
+<ul>
+  <li>Logs from all pods are stored in the <code class="language-plaintext highlighter-rouge">/logs</code> directory in the container</li>
+  <li>Logs are automatically cleaned up after the configured retention period (default: 7 days)</li>
+  <li>Old pod logs can be accessed through the web UI in the pod selection dropdown under “Previous Pods”</li>
+  <li>The retention period can be configured via <code class="language-plaintext highlighter-rouge">MAX_LOG_RETENTION_MINUTES</code> environment variable</li>
+  <li>The deployment uses emptyDir for the logs directory, so logs are not persisted across pod restarts</li>
+</ul>
+
+<h2 id="contributing">Contributing</h2>
+
+<p>We welcome contributions! Please follow these guidelines when submitting a Pull Request:</p>
+
+<ol>
+  <li>Fork the repository and create your feature branch (<code class="language-plaintext highlighter-rouge">git checkout -b feature/amazing-feature</code>)</li>
+  <li>Make your changes</li>
+  <li>Test your changes, consider using the <a href="tests/log-gen-deployment.yaml">log-gen-deployment.yaml</a> to test the app
+    <ol>
+      <li>Feel free to make better tests</li>
+    </ol>
+  </li>
+  <li>
+    <p>Run code formatting and linting:</p>
+
+    <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Format code with ruff</span>
+uvx ruff format <span class="nb">.</span>
+<span class="c"># Run ruff linter</span>
+uvx ruff check <span class="nt">--fix</span> <span class="nb">.</span>
+</code></pre></div>    </div>
+  </li>
+  <li>Commit your changes with a descriptive commit message</li>
+  <li>Push to your branch (<code class="language-plaintext highlighter-rouge">git push origin feature/amazing-feature</code>)</li>
+  <li>Open a Pull Request</li>
+</ol>
+
+<p>Pull Request Guidelines</p>
+
+<ul>
+  <li>Keep PRs focused and small when possible</li>
+  <li>Update documentation for any new features</li>
+  <li>Follow the existing code style</li>
+  <li>Use clear commit messages that describe the changes</li>
+  <li>Reference any related issues in your PR description</li>
+</ul>
+
+<h2 id="development">Development</h2>
+
+<p>Testing is done with <a href="https://playwright.dev/">Playwright</a>.</p>
+
+<p>The tests assume that the test “log-gen” pod is running in the namespace where the app is deployed.</p>
+
+<p>For detailed testing instructions, local development setup, and troubleshooting, see the <a href="tests/README.md">Testing Guide</a>.</p>
+
+<h3 id="quick-start">Quick Start</h3>
+
+<p>To install development dependencies:</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv pip <span class="nb">install</span> <span class="nt">-e</span> <span class="s2">".[dev]"</span>
+</code></pre></div></div>
+
+<p>To run the tests:</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest
+</code></pre></div></div>
+
+<h3 id="coffee-buy-me-a-coffee">:coffee: <a href="https://buymeacoffee.com/jessegoodier">Buy Me A Coffee</a></h3>

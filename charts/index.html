@@ -1,0 +1,302 @@
+<h1 id="logpilot-helm-chart">logPilot Helm Chart</h1>
+
+<p>Helm chart for deploying the logPilot - a simple Kubernetes pod log viewer web app.</p>
+
+<p>Give direct log access to your software engineers to see the logs without giving them access to the kubeconfig or other centralized log tools.</p>
+
+<p>This application is designed to only monitor logs of pods in the namespace it is deployed to.</p>
+
+<p>More information about the application can be found in the <a href="https://github.com/jessegoodier/logpilot">project readme</a>.</p>
+
+<h2 id="installation">Installation</h2>
+
+<p>Install the latest version from the web in your namespace (using <code class="language-plaintext highlighter-rouge">kube-system</code> as an example):</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>helm <span class="nb">install </span>logpilot <span class="se">\</span>
+  <span class="nt">--repo</span> https://jessegoodier.github.io/logpilot logpilot <span class="se">\</span>
+  <span class="nt">-n</span> kube-system
+</code></pre></div></div>
+
+<p>Disable retaining logs of pods that have been terminated:</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Install with custom values</span>
+helm <span class="nb">install </span>logpilot <span class="se">\</span>
+  <span class="nt">--repo</span> https://jessegoodier.github.io/logpilot logpilot <span class="se">\</span>
+  <span class="nt">--set</span> previousPodLogs.enabled<span class="o">=</span><span class="nb">false</span>
+</code></pre></div></div>
+
+<p>Persist logs on restart:</p>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c"># Install with persistent storage</span>
+helm <span class="nb">install </span>logpilot <span class="se">\</span>
+  <span class="nt">--repo</span> https://jessegoodier.github.io/logpilot logpilot <span class="se">\</span>
+  <span class="nt">--set</span> storage.type<span class="o">=</span>persistentVolume <span class="se">\</span>
+  <span class="nt">--set</span> storage.persistentVolume.size<span class="o">=</span>10Gi
+</code></pre></div></div>
+
+<h2 id="configuration">Configuration</h2>
+
+<p>The following table lists the configurable parameters and their default values:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">auth.apiKey</code></td>
+      <td>API authentication key (set to “no-key” or empty to disable)</td>
+      <td><code class="language-plaintext highlighter-rouge">"no-key"</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">auth.existingSecret</code></td>
+      <td>Use existing secret for API key</td>
+      <td><code class="language-plaintext highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">auth.existingSecretKey</code></td>
+      <td>Key in existing secret containing API key</td>
+      <td><code class="language-plaintext highlighter-rouge">"api-key"</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">previousPodLogs.enabled</code></td>
+      <td>Enable/disable log archival functionality</td>
+      <td><code class="language-plaintext highlighter-rouge">true</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">previousPodLogs.retentionMinutes</code></td>
+      <td>Log retention period in minutes (7 days default)</td>
+      <td><code class="language-plaintext highlighter-rouge">10080</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">previousPodLogs.allowPurge</code></td>
+      <td>Allow purging of previous pod logs</td>
+      <td><code class="language-plaintext highlighter-rouge">true</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">storage.type</code></td>
+      <td>Storage type: “emptyDir” or “persistentVolume”</td>
+      <td><code class="language-plaintext highlighter-rouge">emptyDir</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">storage.persistentVolume.size</code></td>
+      <td>PVC size when using persistent storage</td>
+      <td><code class="language-plaintext highlighter-rouge">5Gi</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">storage.persistentVolume.storageClass</code></td>
+      <td>Storage class for PVC</td>
+      <td><code class="language-plaintext highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">storage.persistentVolume.accessModes</code></td>
+      <td>Access modes for PVC</td>
+      <td><code class="language-plaintext highlighter-rouge">["ReadWriteOnce"]</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">replicaCount</code></td>
+      <td>Number of replicas</td>
+      <td><code class="language-plaintext highlighter-rouge">1</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">image.repository</code></td>
+      <td>Container image repository</td>
+      <td><code class="language-plaintext highlighter-rouge">python</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">image.tag</code></td>
+      <td>Container image tag</td>
+      <td><code class="language-plaintext highlighter-rouge">"3.13-slim"</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">image.pullPolicy</code></td>
+      <td>Image pull policy</td>
+      <td><code class="language-plaintext highlighter-rouge">IfNotPresent</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ingress.enabled</code></td>
+      <td>Enable ingress</td>
+      <td><code class="language-plaintext highlighter-rouge">false</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ingress.annotations</code></td>
+      <td>Ingress annotations</td>
+      <td><code class="language-plaintext highlighter-rouge">{}</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ingress.ingressClassName</code></td>
+      <td>Ingress class name</td>
+      <td><code class="language-plaintext highlighter-rouge">""</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ingress.hosts</code></td>
+      <td>Ingress hosts configuration</td>
+      <td>See values.yaml</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ingress.tls</code></td>
+      <td>Ingress TLS configuration</td>
+      <td>See values.yaml</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">service.type</code></td>
+      <td>Service type</td>
+      <td><code class="language-plaintext highlighter-rouge">ClusterIP</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">service.port</code></td>
+      <td>Service port</td>
+      <td><code class="language-plaintext highlighter-rouge">5001</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">resources.requests.memory</code></td>
+      <td>Memory request</td>
+      <td><code class="language-plaintext highlighter-rouge">"128Mi"</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">resources.requests.cpu</code></td>
+      <td>CPU request</td>
+      <td><code class="language-plaintext highlighter-rouge">"100m"</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">resources.limits.memory</code></td>
+      <td>Memory limit</td>
+      <td><code class="language-plaintext highlighter-rouge">"256Mi"</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">resources.limits.cpu</code></td>
+      <td>CPU limit</td>
+      <td><code class="language-plaintext highlighter-rouge">"1500m"</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">rbac.create</code></td>
+      <td>Create RBAC resources</td>
+      <td><code class="language-plaintext highlighter-rouge">true</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">serviceAccount.create</code></td>
+      <td>Create service account</td>
+      <td><code class="language-plaintext highlighter-rouge">true</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">serviceAccount.annotations</code></td>
+      <td>Service account annotations</td>
+      <td><code class="language-plaintext highlighter-rouge">{}</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">serviceAccount.name</code></td>
+      <td>Service account name</td>
+      <td><code class="language-plaintext highlighter-rouge">""</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="examples">Examples</h2>
+
+<h3 id="custom-values-file">Custom Values File</h3>
+
+<p>Create a <code class="language-plaintext highlighter-rouge">helmValues-logpilot.yaml</code> file:</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="na">auth</span><span class="pi">:</span>
+  <span class="na">apiKey</span><span class="pi">:</span> <span class="s2">"</span><span class="s">my-secure-api-key"</span>
+
+<span class="na">previousPodLogs</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">retentionMinutes</span><span class="pi">:</span> <span class="m">20160</span>  <span class="c1"># 14 days</span>
+  <span class="na">allowPurge</span><span class="pi">:</span> <span class="kc">false</span>
+
+<span class="na">storage</span><span class="pi">:</span>
+  <span class="na">type</span><span class="pi">:</span> <span class="s">persistentVolume</span>
+  <span class="na">persistentVolume</span><span class="pi">:</span>
+    <span class="na">size</span><span class="pi">:</span> <span class="s">15Gi</span>
+    <span class="na">storageClass</span><span class="pi">:</span> <span class="s2">"</span><span class="s">standard"</span>
+
+<span class="na">ingress</span><span class="pi">:</span>
+  <span class="na">enabled</span><span class="pi">:</span> <span class="kc">true</span>
+  <span class="na">ingressClassName</span><span class="pi">:</span> <span class="s2">"</span><span class="s">nginx"</span>
+  <span class="na">hosts</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">host</span><span class="pi">:</span> <span class="s">logs.mycompany.com</span>
+      <span class="na">paths</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="na">path</span><span class="pi">:</span> <span class="s">/</span>
+          <span class="na">pathType</span><span class="pi">:</span> <span class="s">Prefix</span>
+  <span class="na">tls</span><span class="pi">:</span>
+    <span class="pi">-</span> <span class="na">hosts</span><span class="pi">:</span>
+        <span class="pi">-</span> <span class="s">logs.mycompany.com</span>
+      <span class="na">secretName</span><span class="pi">:</span> <span class="s">logs-tls</span>
+
+<span class="na">resources</span><span class="pi">:</span>
+  <span class="na">requests</span><span class="pi">:</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">256Mi"</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">200m"</span>
+  <span class="na">limits</span><span class="pi">:</span>
+    <span class="na">memory</span><span class="pi">:</span> <span class="s2">"</span><span class="s">512Mi"</span>
+    <span class="na">cpu</span><span class="pi">:</span> <span class="s2">"</span><span class="s">2000m"</span>
+</code></pre></div></div>
+
+<p>Then install with:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>helm <span class="nb">install </span>logpilot <span class="se">\</span>
+  <span class="nt">--repo</span> https://jessegoodier.github.io/logpilot logpilot <span class="se">\</span>
+  <span class="nt">-f</span> helmValues-logpilot.yaml
+</code></pre></div></div>
+
+<h2 id="features">Features</h2>
+
+<ul>
+  <li><strong>Web-based log viewer</strong> - Modern, responsive UI for viewing pod logs</li>
+  <li><strong>Multi-container support</strong> - Handle pods with multiple containers</li>
+  <li><strong>Log archival</strong> - Retain logs from terminated pods</li>
+  <li><strong>Real-time search and filtering</strong> - Find specific log entries quickly</li>
+  <li><strong>Theme support</strong> - Light and dark mode</li>
+  <li><strong>API authentication</strong> - Optional security via API keys</li>
+  <li><strong>Namespace isolation</strong> - Only access pods in configured namespace</li>
+</ul>
+
+<h2 id="api-endpoints">API Endpoints</h2>
+
+<p>The application exposes the following REST API endpoints:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">GET /api/pods</code> - List pods and containers in namespace</li>
+  <li><code class="language-plaintext highlighter-rouge">GET /api/logs</code> - Fetch logs from active pods</li>
+  <li><code class="language-plaintext highlighter-rouge">GET /api/archived_pods</code> - List pods with archived logs</li>
+  <li><code class="language-plaintext highlighter-rouge">GET /api/archived_logs</code> - Fetch logs from archived pods</li>
+  <li><code class="language-plaintext highlighter-rouge">GET /api/logDirStats</code> - Get log directory statistics</li>
+  <li><code class="language-plaintext highlighter-rouge">POST /api/purgePreviousLogs</code> - Clean up archived logs</li>
+</ul>
+
+<h2 id="security">Security</h2>
+
+<p>The chart creates minimal RBAC permissions:</p>
+
+<ul>
+  <li>List pods in the target namespace</li>
+  <li>Read pod logs in the target namespace</li>
+</ul>
+
+<p>API key authentication is optional but recommended when exposing the ingress.</p>
+
+<h2 id="storage-considerations">Storage Considerations</h2>
+
+<h3 id="emptydir-default">EmptyDir (Default)</h3>
+
+<ul>
+  <li>Logs are stored in the pod’s ephemeral storage</li>
+  <li>Data is lost when the pod is deleted or restarted</li>
+  <li>Suitable for development or when log persistence is not required</li>
+</ul>
+
+<h3 id="persistent-volume">Persistent Volume</h3>
+
+<ul>
+  <li>Logs are stored on persistent storage</li>
+  <li>Data survives pod restarts and deletions</li>
+</ul>
+
+<h2 id="contributing">Contributing</h2>
+
+<p>For issues and contributions, please visit the <a href="https://github.com/jessegoodier/logpilot">GitHub repository</a>.</p>

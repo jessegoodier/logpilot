@@ -1,0 +1,123 @@
+# API authentication
+auth:
+  # Set to empty string or "no-key" to disable authentication
+  apiKey: "no-key"
+  # Use existing secret for API key (optional)
+  existingSecret: ""
+  existingSecretKey: "api-key"
+
+# Previous pod logs configuration
+previousPodLogs:
+  # Enable/disable storing previous pod logs
+  enabled: true
+  # Log retention period in minutes (default: 7 days)
+  retentionMinutes: 10080
+  # Allow purging of previous pod logs
+  allowPurge: true
+
+# Logging configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  # Enable debug logging for specific components
+  debug:
+    # Enable debug logging for the main application (detailed log processing info)
+    app: false
+    # Enable debug logging for Kubernetes client (API request/response details)
+    kubernetes: false
+    # Enable debug logging for log archival system (container startup states, etc.)
+    archiver: false
+
+# Storage configuration for all logs
+storage:
+  # Storage type: "emptyDir" or "persistentVolume"
+  type: emptyDir
+  # Only used when type is "persistentVolume"
+  persistentVolume:
+    size: 5Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+
+replicaCount: 1
+
+image:
+  repository: python
+  tag: 3.14-slim
+  pullPolicy: IfNotPresent
+
+# Ingress configuration
+ingress:
+  enabled: false
+  annotations: {}
+  ingressClassName: ""
+  hosts:
+    - host: logpilot.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - logpilot.local
+      secretName: logpilot-tls
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 5001
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "1500m"
+
+
+
+# Pod termination grace period
+terminationGracePeriodSeconds: 2
+
+# Readiness probe configuration
+readinessProbe:
+  initialDelaySeconds: 2
+  periodSeconds: 5
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 1
+
+# RBAC configuration
+rbac:
+  # Specifies whether RBAC resources should be created
+  create: true
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
