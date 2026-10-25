@@ -4,6 +4,30 @@ entries:
   - annotations:
       category: Monitoring
     apiVersion: v2
+    appVersion: 0.9.0
+    created: "2026-10-25T14:00:42.04946633Z"
+    description: A Helm chart for logPilot
+    digest: 2e9291a4f21056e4471aa2e7185c20efed3a91db2c8b09e42f49eb43fcc6d7f8
+    home: https://github.com/jessegoodier/logPilot
+    icon: https://raw.githubusercontent.com/jessegoodier/logPilot/main/icon.png
+    keywords:
+    - kubernetes
+    - logs
+    - monitoring
+    - web
+    maintainers:
+    - email: 31039225+jessegoodier@users.noreply.github.com
+      name: Jesse Goodier
+    name: logpilot
+    sources:
+    - https://github.com/jessegoodier/logPilot
+    type: application
+    urls:
+    - https://github.com/jessegoodier/logpilot/releases/download/v0.9.0/logpilot-0.9.0.tgz
+    version: 0.9.0
+  - annotations:
+      category: Monitoring
+    apiVersion: v2
     appVersion: 0.8.2
     created: "2025-06-18T20:53:28.466097219Z"
     description: A Helm chart for logPilot
@@ -313,4 +337,4 @@ entries:
     urls:
     - https://github.com/jessegoodier/logpilot/releases/download/v0.3.9/logpilot-0.3.9.tgz
     version: 0.3.9
-generated: "2025-06-18T20:53:28.464178832Z"
+generated: "2026-10-25T14:00:42.047745192Z"
