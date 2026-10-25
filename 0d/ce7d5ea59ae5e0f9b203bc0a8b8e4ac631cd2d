@@ -1,0 +1,20 @@
+.github/workflows/helm-publisher.yml
+  s_46505d70052ffc::t_869e130905cb1b 147-149
+  s_46505d70052ffc::t_ca81864dabdeae 81,85-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0dce7d5ea59ae5e0f9b203bc0a8b8e4ac631cd2d",
+  "prompts": {},
+  "sessions": {
+    "s_46505d70052ffc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6066af18-f09d-4d44-a4ff-ae26f2f9be94",
+        "model": "grok-4.7"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  }
+}
