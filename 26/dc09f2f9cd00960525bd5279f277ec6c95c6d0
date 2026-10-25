@@ -1,0 +1,22 @@
+_config.yml
+  s_46505d70052ffc::t_8b491fbed3365b 1-23
+.github/workflows/gh-pages.yml
+  s_46505d70052ffc::t_66d6b023da84d1 41-43
+  s_46505d70052ffc::t_b983a8b4f36b60 11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "26dc09f2f9cd00960525bd5279f277ec6c95c6d0",
+  "prompts": {},
+  "sessions": {
+    "s_46505d70052ffc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6066af18-f09d-4d44-a4ff-ae26f2f9be94",
+        "model": "grok-4.7"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  }
+}
