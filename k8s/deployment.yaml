@@ -34,7 +34,7 @@ spec:
         - containerPort: 5001
         env:
         - name: APP_VERSION
-          value: "0.8.2"
+          value: "0.9.0"
         - name: RETAIN_ALL_POD_LOGS
           value: "true"
         - name: MAX_LOG_RETENTION_MINUTES
