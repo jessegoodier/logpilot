@@ -1,0 +1,98 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+
+categories:
+  - title: '🚀 Features'
+    exclusive: true
+    semver-increment: minor
+    when:
+      labels:
+        - feature
+        - enhancement
+  - title: '🐛 Bug Fixes'
+    exclusive: true
+    semver-increment: patch
+    when:
+      labels:
+        - bug
+  - title: '📚 Documentation'
+    exclusive: true
+    semver-increment: patch
+    when:
+      labels:
+        - documentation
+  - title: '🧹 Maintenance'
+    exclusive: true
+    semver-increment: patch
+    when:
+      labels:
+        - chore
+        - refactoring
+  - title: '⬆️ Dependencies'
+    exclusive: true
+    semver-increment: patch
+    when:
+      labels:
+        - dependencies
+  - title: 'Other Changes'
+    semver-increment: patch
+  - type: pre-exclude
+    when:
+      labels:
+        - skip-changelog
+  - type: version-resolver
+    semver-increment: major
+    when:
+      labels:
+        - breaking
+  - type: version-resolver
+    semver-increment: minor
+    when:
+      labels:
+        - feature
+        - enhancement
+  - type: version-resolver
+    semver-increment: patch
+    when:
+      labels:
+        - bug
+        - documentation
+        - chore
+        - refactoring
+        - dependencies
+  - type: version-resolver
+    semver-increment: patch
+
+change-template: '- $TITLE by @$AUTHOR in #$NUMBER'
+change-title-escapes: '\<*_&'
+
+autolabeler:
+  - label: feature
+    title:
+      - '/^feat(\(.+\))?!?:/i'
+  - label: bug
+    title:
+      - '/^fix(\(.+\))?!?:/i'
+  - label: documentation
+    title:
+      - '/^docs(\(.+\))?!?:/i'
+  - label: chore
+    title:
+      - '/^chore(\(.+\))?!?:/i'
+  - label: refactoring
+    title:
+      - '/^refactor(\(.+\))?!?:/i'
+  - label: dependencies
+    title:
+      - '/^build\(deps/i'
+      - '/^deps(\(.+\))?!?:/i'
+  - label: breaking
+    title:
+      - '/^[a-z]+(\(.+\))?!:/i'

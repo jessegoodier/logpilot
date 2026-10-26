@@ -13,12 +13,18 @@ on:
           - major
         default: patch
 
+concurrency:
+  group: version-bumper
+  cancel-in-progress: false
+
 jobs:
-  version-bump:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
+      pull-requests: read
+    outputs:
+      version: ${{ steps.version.outputs.new_version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,6 +39,16 @@ jobs:
           enable-cache: true
           activate-environment: true
 
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+        with:
+          ruby-version: '3.3'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: '3.22.1'
+
       - name: Install dependencies
         run: uv sync --extra dev
 
@@ -41,91 +57,154 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
 
-      - name: Get current version
-        id: current_version
+      - name: Bump version
+        id: version
         run: |
           current=$(uv run bump-my-version show current_version)
-          echo "current=$current" >> $GITHUB_OUTPUT
-          echo "Current version: $current"
-
-      - name: Create version bump branch
-        id: branch
-        run: |
-          new_version=$(uv run bump-my-version show --increment ${{ inputs.version_type }} new_version)
-          branch_name="v$new_version"
-          git checkout -b $branch_name
-          echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
-          echo "new_version=$new_version" >> $GITHUB_OUTPUT
-          echo "Created branch: $branch_name for version: $new_version"
-
-      - name: Bump version in all files
-        run: |
-          echo "Bumping version with type: ${{ inputs.version_type }}"
-          uv run bump-my-version bump ${{ inputs.version_type }} --allow-dirty
-          echo "Version bump completed"
+          new_version=$(uv run bump-my-version show --increment "${{ inputs.version_type }}" new_version)
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "Bumping $current -> $new_version (${{ inputs.version_type }})"
+          uv run bump-my-version bump "${{ inputs.version_type }}" --allow-dirty
 
       - name: Copy Python files to Helm chart
         run: |
-          echo "Copying Python files to Helm chart..."
+          mkdir -p charts/logpilot/src
           cp -r src/* charts/logpilot/src/
           cp pyproject.toml charts/logpilot/
-          echo "Files copied successfully"
 
-      - name: Commit changes
+      - name: Refresh lockfile
+        run: uv lock
+
+      - name: Install helm-unittest plugin
         run: |
-          git add .
-          git commit -m "Bump version to ${{ steps.branch.outputs.new_version }}
+          helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.2.1
 
-          - Updated all version references
-          - Copied Python source files to Helm chart
-          - Ready for release
-
-          🤖 Generated with [Claude Code](https://claude.ai/code)
-
-          Co-Authored-By: Claude <noreply@anthropic.com>"
-
-      - name: Push branch
+      - name: Test Helm chart
         run: |
-          git push origin ${{ steps.branch.outputs.branch_name }}
+          helm unittest charts/logpilot
+          helm lint charts/logpilot
+          helm template test-release charts/logpilot > /dev/null
 
-      - name: Create Pull Request
+      - name: Build docs site
+        run: |
+          gem install bundler jekyll jekyll-readme-index
+          bundle init
+          echo 'gem "jekyll", "~> 4.2"' >> Gemfile
+          echo 'gem "jekyll-remote-theme"' >> Gemfile
+          echo 'gem "jekyll-readme-index"' >> Gemfile
+          bundle install
+          bundle exec jekyll build -d site
+
+      - name: Package chart and write Helm index
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          VERSION: ${{ steps.version.outputs.new_version }}
         run: |
-          gh pr create \
-            --base main \
-            --head ${{ steps.branch.outputs.branch_name }} \
-            --title "🚀 Version Bump: ${{ steps.current_version.outputs.current }} → ${{ steps.branch.outputs.new_version }}" \
-            --body "$(cat <<'EOF'
-          ## 🚀 Version Bump: ${{ inputs.version_type }}
+          set -euo pipefail
+          mkdir -p dist /tmp/indexes
+          helm package charts/logpilot --destination dist/
 
-          **Previous Version:** \`${{ steps.current_version.outputs.current }}\`
-          **New Version:** \`${{ steps.branch.outputs.new_version }}\`
+          fetch_index() {
+            local url="$1" dest="$2"
+            if curl -fsSL "$url" -o "$dest" && grep -q '^apiVersion:' "$dest"; then
+              echo "fetched $url"
+            else
+              echo "no index at $url"
+              rm -f "$dest"
+            fi
+          }
+          # The live Pages site can lag the gh-pages branch, and deploy-pages
+          # does not write the branch. Union both so a release cannot drop versions.
+          fetch_index "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/gh-pages/index.yaml" /tmp/indexes/branch.yaml
+          fetch_index "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/index.yaml" /tmp/indexes/live.yaml
+          if [ ! -f /tmp/indexes/branch.yaml ] && [ ! -f /tmp/indexes/live.yaml ]; then
+            echo "No existing Helm index found"
+            exit 1
+          fi
 
-          ### 📋 Changes Made
-          - ✅ Updated version in all Python files
-          - ✅ Updated version in Helm chart files
-          - ✅ Updated version in Kubernetes manifests
-          - ✅ Updated version in workflow files
-          - ✅ Copied latest Python source files to Helm chart
+          uv run python << 'PY'
+          from pathlib import Path
+          import yaml
 
-          ### 🔍 Files Updated
-          - \`pyproject.toml\`
-          - \`src/__init__.py\`
-          - \`src/main.py\`
-          - \`k8s/deployment.yaml\`
-          - \`charts/logpilot/Chart.yaml\`
-          - \`charts/logpilot/src/__init__.py\`
-          - \`charts/logpilot/pyproject.toml\`
-          - \`.github/workflows/helm-publisher.yml\`
+          root = Path("/tmp/indexes")
 
-          ### 🎯 Next Steps
-          1. Review the changes in this PR
-          2. Merge this PR to complete the version bump
-          3. The Helm Chart Publisher workflow will automatically trigger
+          def load(path: Path):
+              if not path.exists():
+                  return {"apiVersion": "v1", "entries": {}}
+              data = yaml.safe_load(path.read_text()) or {}
+              data.setdefault("apiVersion", "v1")
+              data.setdefault("entries", {})
+              return data
 
-          ---
-          🤖 *This PR was automatically created by the Simple Version Bump workflow*
-          EOF
-          )" \
-            --label "version-bump,automated-pr"
+          merged = {"apiVersion": "v1", "entries": {}}
+          for name in ("branch.yaml", "live.yaml"):
+              for chart, versions in (load(root / name).get("entries") or {}).items():
+                  bucket = merged["entries"].setdefault(chart, [])
+                  have = {item.get("version") for item in bucket}
+                  for item in versions:
+                      if item.get("version") not in have:
+                          bucket.append(item)
+                          have.add(item.get("version"))
+          (root / "previous.yaml").write_text(yaml.safe_dump(merged, sort_keys=False))
+          found = sorted(
+              {
+                  item.get("version")
+                  for charts in merged["entries"].values()
+                  for item in charts
+              }
+          )
+          print("previous", found)
+          PY
+
+          helm repo index dist/ \
+            --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/" \
+            --merge /tmp/indexes/previous.yaml
+          grep -q "version: ${VERSION}" dist/index.yaml
+          cp dist/index.yaml site/index.yaml
+          touch site/.nojekyll
+
+      - name: Commit and push version bump
+        id: push
+        run: |
+          git add pyproject.toml uv.lock src charts/logpilot k8s
+          git commit -m "Bump version to ${{ steps.version.outputs.new_version }}"
+          git push origin HEAD:main
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        uses: release-drafter/release-drafter@978bb0b30c5ee8cdd332ced253758157150d43f0 # v7.10.0
+        with:
+          publish: true
+          latest: true
+          version: ${{ steps.version.outputs.new_version }}
+          tag: v${{ steps.version.outputs.new_version }}
+          name: v${{ steps.version.outputs.new_version }}
+          commitish: ${{ steps.push.outputs.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Helm chart
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "v${{ steps.version.outputs.new_version }}" dist/*.tgz --clobber
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+          include-hidden-files: true
+
+  deploy:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

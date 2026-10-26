@@ -21,7 +21,7 @@ dev = [
   "ruff>=0.17.2",
   "isort>=9.0.2",
   "packaging>=26.3",
-  "bump-my-version>=1.6.5",
+  "bump-my-version>=1.6.7",
   "ruamel-yaml>=0.19.1",
 ]
 
@@ -86,8 +86,3 @@ replace = "__version__ = \"{new_version}\""
 filename = "charts/logpilot/pyproject.toml"
 search = "version = \"{current_version}\""
 replace = "version = \"{new_version}\""
-
-[[tool.bumpversion.files]]
-filename = ".github/workflows/helm-publisher.yml"
-search = "v{current_version}"
-replace = "v{new_version}"
