@@ -1,0 +1,39 @@
+.github/workflows/version-bumper.yml
+  s_46505d70052ffc::t_418d6b4b91a844 149-156
+  s_46505d70052ffc::t_88969dc7dda60d 16-19,21,25-27,42,44-51,60-61,64-68,72,76-77,79-81,83-87,89,91-148,157-184,186,188,190-210
+  s_46505d70052ffc::t_14fb2c1198dbd1 43
+.github/release-drafter.yml
+  s_46505d70052ffc::t_0ef410092023d2 1-98
+.github/workflows/helm-tester.yml
+  s_46505d70052ffc::t_11f08c65461f93 19,22
+.github/workflows/release-drafter.yml
+  s_46505d70052ffc::t_14626de60e3c20 1-23
+pyproject.toml
+  s_6cdcf16f659c75::t_01a8ffeddbfc92 24
+uv.lock
+  s_6cdcf16f659c75::t_e3c800a1ed4f40 189,202,204,592,615
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c69a8fbe07334b8093c0e65c8ece4df62da1287f",
+  "prompts": {},
+  "sessions": {
+    "s_46505d70052ffc": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6066af18-f09d-4d44-a4ff-ae26f2f9be94",
+        "model": "grok-4.7"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    },
+    "s_6cdcf16f659c75": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "cf9e2c46-c78f-4f67-b801-1fcce7c4056e",
+        "model": "default"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  }
+}
