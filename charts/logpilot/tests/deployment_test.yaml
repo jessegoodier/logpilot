@@ -1,8 +1,12 @@
 suite: test deployment
 templates:
   - deployment.yaml
+  - configmap.yaml
 tests:
   - it: should render deployment with default values
+    documentSelector:
+      path: kind
+      value: Deployment
     asserts:
       - isKind:
           of: Deployment
@@ -12,26 +16,36 @@ tests:
       - equal:
           path: spec.replicas
           value: 1
-      - equal:
+      - matchRegex:
           path: spec.template.spec.containers[0].image
-          value: "python:3.14-slim"
+          pattern: '^ghcr.io/jessegoodier/logpilot:[0-9]+\.[0-9]+\.[0-9]+.*$'
+      - notExists:
+          path: spec.template.spec.containers[0].command
+      - equal:
+          path: spec.template.spec.containers[0].envFrom[0].configMapRef.name
+          value: RELEASE-NAME-logpilot-config
+      - exists:
+          path: spec.template.metadata.annotations["checksum/config"]
       - equal:
           path: spec.template.spec.containers[0].env[0].name
-          value: "APP_VERSION"
-      - matchRegex:
+          value: "API_KEY"
+      - equal:
           path: spec.template.spec.containers[0].env[0].value
-          pattern: '^[0-9]+\.[0-9]+\.[0-9]+.*$'
+          value: "no-key"
       - equal:
-          path: spec.template.spec.containers[0].env[1].name
-          value: "RETAIN_ALL_POD_LOGS"
-      - equal:
-          path: spec.template.spec.containers[0].env[1].value
-          value: "true"
+          path: spec.template.spec.containers[0].volumeMounts[0].mountPath
+          value: "/logs"
+      - lengthEqual:
+          path: spec.template.spec.containers[0].volumeMounts
+          count: 1
 
   - it: should render deployment with custom values
+    documentSelector:
+      path: kind
+      value: Deployment
     set:
       replicaCount: 2
-      image.tag: "3.14-alpine"
+      image.tag: "1.2.3"
       previousPodLogs.enabled: false
     asserts:
       - equal:
@@ -39,32 +53,40 @@ tests:
           value: 2
       - equal:
           path: spec.template.spec.containers[0].image
-          value: "python:3.14-alpine"
-      - equal:
-          path: spec.template.spec.containers[0].env[1].value
-          value: "false"
+          value: "ghcr.io/jessegoodier/logpilot:1.2.3"
 
   - it: should use existing secret for API key
+    documentSelector:
+      path: kind
+      value: Deployment
     set:
       auth.existingSecret: "my-secret"
       auth.existingSecretKey: "my-key"
     asserts:
       - equal:
-          path: spec.template.spec.containers[0].env[4].valueFrom.secretKeyRef.name
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.name
           value: "my-secret"
       - equal:
-          path: spec.template.spec.containers[0].env[4].valueFrom.secretKeyRef.key
+          path: spec.template.spec.containers[0].env[0].valueFrom.secretKeyRef.key
           value: "my-key"
+      - notExists:
+          path: spec.template.spec.containers[0].env[0].value
 
   - it: should use direct API key value when no existing secret
+    documentSelector:
+      path: kind
+      value: Deployment
     set:
       auth.apiKey: "test-key"
     asserts:
       - equal:
-          path: spec.template.spec.containers[0].env[4].value
+          path: spec.template.spec.containers[0].env[0].value
           value: "test-key"
 
   - it: should set resource limits and requests
+    documentSelector:
+      path: kind
+      value: Deployment
     set:
       resources:
         requests:

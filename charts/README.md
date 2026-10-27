@@ -39,6 +39,8 @@ helm install logpilot \
 
 ## Configuration
 
+Non-secret settings are rendered into a ConfigMap and loaded with `envFrom`. The API key stays on the container environment, or in the Secret named by `auth.existingSecret`. The pod template is annotated with a checksum of that ConfigMap, so a settings change rolls the Deployment. The image contains the application, so the chart does not mount source files.
+
 The following table lists the configurable parameters and their default values:
 
 | Parameter                               | Description                                                  | Default             |
@@ -54,8 +56,8 @@ The following table lists the configurable parameters and their default values:
 | `storage.persistentVolume.storageClass` | Storage class for PVC                                        | `""`                |
 | `storage.persistentVolume.accessModes`  | Access modes for PVC                                         | `["ReadWriteOnce"]` |
 | `replicaCount`                          | Number of replicas                                           | `1`                 |
-| `image.repository`                      | Container image repository                                   | `python`            |
-| `image.tag`                             | Container image tag                                          | `"3.13-slim"`       |
+| `image.repository`                      | Container image repository                                   | `ghcr.io/jessegoodier/logpilot` |
+| `image.tag`                             | Container image tag (empty uses the chart appVersion)        | `""`                |
 | `image.pullPolicy`                      | Image pull policy                                            | `IfNotPresent`      |
 | `ingress.enabled`                       | Enable ingress                                               | `false`             |
 | `ingress.annotations`                   | Ingress annotations                                          | `{}`                |

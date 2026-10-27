@@ -1,17 +1,15 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "logpilot.fullname" . }}-config
+  name: {{ include "logpilot.configMapName" . }}
   labels:
     {{- include "logpilot.labels" . | nindent 4 }}
-  annotations:
-    checksum/config: {{ include "logpilot.configMapChecksum" . }}
 data:
-  main.py: |
-{{ .Files.Get "src/main.py" | indent 4 }}
-  log_archiver.py: |
-{{ .Files.Get "src/log_archiver.py" | indent 4 }}
-  index.html: |
-{{ .Files.Get "src/index.html" | indent 4 }}
-  pyproject.toml: |
-{{ .Files.Get "pyproject.toml" | indent 4 }}
+  APP_VERSION: {{ .Chart.AppVersion | quote }}
+  RETAIN_ALL_POD_LOGS: {{ .Values.previousPodLogs.enabled | quote }}
+  MAX_LOG_RETENTION_MINUTES: {{ .Values.previousPodLogs.retentionMinutes | quote }}
+  ALLOW_PREVIOUS_LOG_PURGE: {{ .Values.previousPodLogs.allowPurge | quote }}
+  LOG_LEVEL: {{ .Values.logging.level | quote }}
+  DEBUG_APP: {{ .Values.logging.debug.app | quote }}
+  DEBUG_KUBERNETES: {{ .Values.logging.debug.kubernetes | quote }}
+  DEBUG_ARCHIVER: {{ .Values.logging.debug.archiver | quote }}

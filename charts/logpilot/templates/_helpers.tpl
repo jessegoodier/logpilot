@@ -61,12 +61,9 @@ Create the name of the service account to use
 {{- end }}
 {{- end }}
 
-{{- define "src-app-path" -}}
-{{- . | replace "../../src/" "" | replace "/" "-" -}}
-{{- end -}}
-
-{{- define "logpilot.configMapChecksum" -}}
-{{- .Files.Get "src/main.py" | sha256sum }}
-{{- .Files.Get "src/log_archiver.py" | sha256sum }}
-{{- .Files.Get "src/index.html" | sha256sum }}
+{{/*
+Name of the configuration ConfigMap.
+*/}}
+{{- define "logpilot.configMapName" -}}
+{{- printf "%s-config" (include "logpilot.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}

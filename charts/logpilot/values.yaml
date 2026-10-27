@@ -42,8 +42,9 @@ storage:
 replicaCount: 1
 
 image:
-  repository: python
-  tag: 3.14-slim
+  repository: ghcr.io/jessegoodier/logpilot
+  # Empty tag uses the chart appVersion.
+  tag: ""
   pullPolicy: IfNotPresent
 
 # Ingress configuration
@@ -75,16 +76,18 @@ serviceAccount:
 
 podAnnotations: {}
 
-podSecurityContext: {}
-  # fsGroup: 2000
+# The published image runs as uid 65532. fsGroup makes the log volume writable by that user.
+podSecurityContext:
+  fsGroup: 65532
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
 
 service:
   type: ClusterIP

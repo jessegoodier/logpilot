@@ -2,18 +2,56 @@ suite: test configmap
 templates:
   - configmap.yaml
 tests:
-  - it: should render configmap with source files
+  - it: should render configuration from values
     asserts:
       - isKind:
           of: ConfigMap
       - equal:
           path: metadata.name
           value: RELEASE-NAME-logpilot-config
-      - exists:
+      - equal:
+          path: data.RETAIN_ALL_POD_LOGS
+          value: "true"
+      - equal:
+          path: data.MAX_LOG_RETENTION_MINUTES
+          value: "10080"
+      - equal:
+          path: data.ALLOW_PREVIOUS_LOG_PURGE
+          value: "true"
+      - equal:
+          path: data.LOG_LEVEL
+          value: "INFO"
+      - equal:
+          path: data.DEBUG_APP
+          value: "false"
+      - matchRegex:
+          path: data.APP_VERSION
+          pattern: '^[0-9]+\.[0-9]+\.[0-9]+.*$'
+      - notExists:
           path: data['main.py']
-      - exists:
-          path: data['log_archiver.py']
-      - exists:
-          path: data['index.html']
-      - exists:
+      - notExists:
           path: data['pyproject.toml']
+
+  - it: should render custom configuration
+    set:
+      previousPodLogs.enabled: false
+      previousPodLogs.retentionMinutes: 60
+      previousPodLogs.allowPurge: false
+      logging.level: DEBUG
+      logging.debug.app: true
+    asserts:
+      - equal:
+          path: data.RETAIN_ALL_POD_LOGS
+          value: "false"
+      - equal:
+          path: data.MAX_LOG_RETENTION_MINUTES
+          value: "60"
+      - equal:
+          path: data.ALLOW_PREVIOUS_LOG_PURGE
+          value: "false"
+      - equal:
+          path: data.LOG_LEVEL
+          value: "DEBUG"
+      - equal:
+          path: data.DEBUG_APP
+          value: "true"

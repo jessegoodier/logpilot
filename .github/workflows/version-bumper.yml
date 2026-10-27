@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
       pull-requests: read
     outputs:
       version: ${{ steps.version.outputs.new_version }}
@@ -66,12 +67,6 @@ jobs:
           echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
           echo "Bumping $current -> $new_version (${{ inputs.version_type }})"
           uv run bump-my-version bump "${{ inputs.version_type }}" --allow-dirty
-
-      - name: Copy Python files to Helm chart
-        run: |
-          mkdir -p charts/logpilot/src
-          cp -r src/* charts/logpilot/src/
-          cp pyproject.toml charts/logpilot/
 
       - name: Refresh lockfile
         run: uv lock
@@ -162,6 +157,94 @@ jobs:
           grep -q "version: ${VERSION}" dist/index.yaml
           cp dist/index.yaml site/index.yaml
           touch site/.nojekyll
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image name
+        id: image
+        run: |
+          owner=$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          repo=$(printf '%s' "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')
+          echo "name=ghcr.io/${owner}/${repo}" >> "$GITHUB_OUTPUT"
+          echo "package=${repo}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ steps.version.outputs.new_version }}
+            ${{ steps.image.outputs.name }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.new_version }}
+            org.opencontainers.image.description=Kubernetes pod log viewer
+
+      - name: Make GHCR package public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE: ${{ steps.image.outputs.package }}
+        run: |
+          set -euo pipefail
+          owner_type=$(gh api "users/${GITHUB_REPOSITORY_OWNER}" --jq .type)
+          if [ "$owner_type" = "Organization" ]; then
+            base="/orgs/${GITHUB_REPOSITORY_OWNER}/packages/container/${PACKAGE}"
+          else
+            base="/user/packages/container/${PACKAGE}"
+          fi
+
+          # The package record can lag the registry push.
+          for _ in 1 2 3 4 5 6; do
+            if gh api "$base" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 5
+          done
+
+          # PUT /visibility is the supported route. Some accounts accept PATCH on the package instead.
+          if ! gh api --method PUT -H "Accept: application/vnd.github+json" "${base}/visibility" -f visibility=public \
+            && ! gh api --method PATCH -H "Accept: application/vnd.github+json" "${base}" -f visibility=public \
+            && ! gh api --method PATCH -H "Accept: application/vnd.github+json" "${base}/settings" -f visibility=public; then
+            echo "Could not set ${base} to public" >&2
+            exit 1
+          fi
+
+          visibility=$(gh api "$base" --jq .visibility)
+          echo "Package visibility is ${visibility}"
+          test "$visibility" = "public"
+
+      - name: Point deployment at the published image
+        env:
+          IMAGE: ${{ steps.image.outputs.name }}:${{ steps.version.outputs.new_version }}
+        run: |
+          python3 - << 'PY'
+          import os
+          from pathlib import Path
+
+          image = os.environ["IMAGE"]
+          path = Path("k8s/deployment.yaml")
+          lines = path.read_text().splitlines(keepends=True)
+          for index, line in enumerate(lines):
+              stripped = line.lstrip()
+              if stripped.startswith("image:"):
+                  indent = line[: len(line) - len(stripped)]
+                  lines[index] = f"{indent}image: {image}\n"
+                  path.write_text("".join(lines))
+                  break
+          else:
+              raise SystemExit("image line not found in k8s/deployment.yaml")
+          PY
+          grep -q "image: ${IMAGE}" k8s/deployment.yaml
 
       - name: Commit and push version bump
         id: push
