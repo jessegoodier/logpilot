@@ -1,6 +1,6 @@
 [project]
 name = "logPilot"
-version = "0.9.0"
+version = "0.9.1"
 description = "A simple Kubernetes log viewer web app"
 requires-python = ">=3.14"
 dependencies = [
@@ -21,7 +21,7 @@ dev = [
   "ruff>=0.17.2",
   "isort>=9.0.2",
   "packaging>=26.3",
-  "bump-my-version>=1.6.5",
+  "bump-my-version>=1.6.7",
   "ruamel-yaml>=0.19.1",
 ]
 
@@ -42,7 +42,7 @@ markers = [
 # ==== bump-my-version ====
 
 [tool.bumpversion]
-current_version = "0.9.0"
+current_version = "0.9.1"
 commit = false
 tag = false
 allow_dirty = true
