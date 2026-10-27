@@ -1,0 +1,60 @@
+charts/logpilot/templates/_helpers.tpl
+  s_cd24d730e22783::t_6eb975b74f4e8e 64-69
+charts/logpilot/templates/deployment.yaml
+  s_cd24d730e22783::t_abdfa41ca0c45b 20
+  s_cd24d730e22783::t_b2ada010d61ec2 42-44
+.github/workflows/e2e_test.yml
+  s_cd24d730e22783::t_ecc0e59c6e8598 50-53,55
+charts/logpilot/values.yaml
+  s_cd24d730e22783::t_234050743227b8 79-90
+  s_cd24d730e22783::t_7183047e69d12c 45-47
+charts/logpilot/tests/configmap_test.yaml
+  s_cd24d730e22783::t_88d8e973f7ba9a 5,12-30,32-57
+README.md
+  s_cd24d730e22783::t_e0049a014fbe12 49,55
+  s_cd24d730e22783::t_469e87da9a9eaf 52,58-61,64
+  s_cd24d730e22783::t_3c6f910279000c 47-48
+  s_cd24d730e22783::t_89c7c5024d23fe 50-51
+  s_cd24d730e22783::t_0271b00ccef575 53-54
+.github/workflows/version-bumper.yml
+  s_cd24d730e22783::t_852cca142f2a17 161-248
+  s_cd24d730e22783::t_ca066f40a29881 25
+Dockerfile
+  s_cd24d730e22783::t_fc233231455d32 1-33
+charts/logpilot/tests/deployment_test.yaml
+  s_cd24d730e22783::t_3a3376ca95d3bd 59-61
+  s_cd24d730e22783::t_b1108be43b20ed 87-89
+  s_cd24d730e22783::t_d76211b8f61b19 76-78
+  s_cd24d730e22783::t_c5a53936efe0bd 19,21-28,31,33-34,36-40,48,56,67,70,72-73,83,110
+  s_cd24d730e22783::t_a07a4e2b169839 4,7-9
+  s_cd24d730e22783::t_9a0aecb1a49b0f 43-45
+.dockerignore
+  s_cd24d730e22783::t_27a0d25db63043 1-14
+charts/logpilot/templates/configmap.yaml
+  s_cd24d730e22783::t_1af1f24f7c026d 4,8-15
+charts/README.md
+  s_cd24d730e22783::t_2ed2fd647cbed3 42-43
+  s_cd24d730e22783::t_d81541b46d6df1 59-60
+k8s/deployment.yaml
+  s_cd24d730e22783::t_16d5c014161cb3 27
+  s_cd24d730e22783::t_a72fcc806a2f14 24-26
+tests/README.md
+  s_cd24d730e22783::t_2012e7ab2d89cf 77,79-81
+  s_cd24d730e22783::t_ee7582e2b06481 82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ef87d66331e57d35031f183bb8f71c9ab54ea3f6",
+  "prompts": {},
+  "sessions": {
+    "s_cd24d730e22783": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5ab19412-989a-4882-bdbb-e039fc853f8b",
+        "model": "grok-4.7"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  }
+}
