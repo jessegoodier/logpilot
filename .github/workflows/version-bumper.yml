@@ -198,27 +198,43 @@ jobs:
           set -euo pipefail
           owner_type=$(gh api "users/${GITHUB_REPOSITORY_OWNER}" --jq .type)
           if [ "$owner_type" = "Organization" ]; then
-            base="/orgs/${GITHUB_REPOSITORY_OWNER}/packages/container/${PACKAGE}"
+            candidates="/orgs/${GITHUB_REPOSITORY_OWNER}/packages/container/${PACKAGE}"
           else
-            base="/user/packages/container/${PACKAGE}"
+            # GITHUB_TOKEN reads repo-linked packages at /user. A user PAT
+            # reads them at /users/{owner}. Try both.
+            candidates="/user/packages/container/${PACKAGE} /users/${GITHUB_REPOSITORY_OWNER}/packages/container/${PACKAGE}"
           fi
 
           # The package record can lag the registry push.
+          base=""
+          visibility=""
           for _ in 1 2 3 4 5 6; do
-            if gh api "$base" >/dev/null 2>&1; then
+            for candidate in $candidates; do
+              if visibility=$(gh api "$candidate" --jq .visibility 2>/dev/null); then
+                base="$candidate"
+                break
+              fi
+            done
+            if [ -n "$base" ]; then
               break
             fi
             sleep 5
           done
-
-          # PUT /visibility is the supported route. Some accounts accept PATCH on the package instead.
-          if ! gh api --method PUT -H "Accept: application/vnd.github+json" "${base}/visibility" -f visibility=public \
-            && ! gh api --method PATCH -H "Accept: application/vnd.github+json" "${base}" -f visibility=public \
-            && ! gh api --method PATCH -H "Accept: application/vnd.github+json" "${base}/settings" -f visibility=public; then
-            echo "Could not set ${base} to public" >&2
+          if [ -z "$base" ]; then
+            echo "Package record for ${PACKAGE} was not found" >&2
             exit 1
           fi
 
+          echo "Package visibility is ${visibility} (${base})"
+          # A package linked to this public repository is already public.
+          # GitHub's visibility route 404s for that package, so do not try
+          # to change it again.
+          if [ "$visibility" = "public" ]; then
+            exit 0
+          fi
+
+          gh api --method PUT -H "Accept: application/vnd.github+json" "${base}/visibility" -f visibility=public \
+            || gh api --method PATCH -H "Accept: application/vnd.github+json" "${base}" -f visibility=public
           visibility=$(gh api "$base" --jq .visibility)
           echo "Package visibility is ${visibility}"
           test "$visibility" = "public"
