@@ -1,0 +1,19 @@
+.github/workflows/e2e_test.yml
+  s_cd24d730e22783::t_6cfdec5b395683 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4ce047e4c7c68ba1280c6e74a2d1f0b2960b00ef",
+  "prompts": {},
+  "sessions": {
+    "s_cd24d730e22783": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5ab19412-989a-4882-bdbb-e039fc853f8b",
+        "model": "grok-4.7"
+      },
+      "human_author": "jesse goodier <31039225+jessegoodier@users.noreply.github.com>"
+    }
+  }
+}
