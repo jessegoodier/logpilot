@@ -74,17 +74,12 @@ uv run pytest tests/test_app_playwright.py::test_log_viewer_e2e
    kubectl apply -f tests/log-gen-deployment.yaml -n log-viewer-testing
    ```
 
-2. **Deploy logPilot**:
+2. **Build and deploy logPilot**:
    ```bash
-   # Create ConfigMap
-   kubectl create configmap logpilot \
-     --from-file=src/main.py \
-     --from-file=src/log_archiver.py \
-     --from-file=src/index.html \
-     --from-file=pyproject.toml \
-     -n log-viewer-testing
+   podman build -t logpilot:latest .
+   # kind: kind load docker-image logpilot:latest
+   # minikube: minikube image load logpilot:latest
 
-   # Deploy application
    kubectl apply -f k8s/ -n log-viewer-testing
    ```
 

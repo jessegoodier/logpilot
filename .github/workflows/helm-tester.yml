@@ -20,19 +20,6 @@ jobs:
       - name: Install helm-unittest plugin
         run: |
           helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.2.1
-      - name: Sync source files to chart
-        run: |
-          # Ensure chart src directory exists
-          mkdir -p charts/logpilot/src
-
-          # Copy source files to chart directory
-          cp -r src/* charts/logpilot/src/
-          cp pyproject.toml charts/logpilot/
-
-          # Verify files were copied
-          echo "Files in chart directory:"
-          ls -la charts/logpilot/
-          ls -la charts/logpilot/src/
       - name: Run Helm unit tests
         run: |
           helm unittest charts/logpilot

@@ -44,19 +44,24 @@ See the [readme](charts/README.md) in the helm chart for instructions.
 
 ### Option 2: Raw Kubernetes Manifests
 
-1. Create the configmap:
+A version bump publishes a public image at `ghcr.io/jessegoodier/logpilot:<version>` (and `:latest`) and rewrites `image` in [k8s/deployment.yaml](k8s/deployment.yaml) to that tag. Apply the manifests from that release to pull it. No registry login is required.
+
+1. To build locally instead of using the published image:
 
     ```sh
-    kubectl create configmap logpilot \
-      --from-file=src/main.py \
-      --from-file=src/log_archiver.py \
-      --from-file=src/events.py \
-      --from-file=src/index.html \
-      --from-file=pyproject.toml \
-      -n YOUR_NAMESPACE
+    podman build -t logpilot:latest .
     ```
 
-2. Apply the main manifest:
+    Load it into a local cluster before applying the manifests, and set `image: logpilot:latest` in the deployment:
+
+    ```sh
+    # kind
+    kind load docker-image logpilot:latest
+    # minikube
+    minikube image load logpilot:latest
+    ```
+
+2. Apply the manifests.
 Modify [the app config](k8s/deployment.yaml). See comments on the API key usage.
 
     ```sh

@@ -40,22 +40,19 @@ jobs:
       - name: Create KinD cluster
         uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
         with:
-          version: v0.20.0
+          version: v0.33.0
           node_image: kindest/node:${{ matrix.k8s-version.version }}
           kubectl_version: ${{ matrix.k8s-version.version }}
       - name: Deploy log-generator test application
         run: |
           kubectl create ns log-viewer-testing
           kubectl -n log-viewer-testing create -f tests/log-gen-deployment.yaml
+      - name: Build logpilot image
+        run: docker build -t logpilot:latest .
+      - name: Load image into KinD
+        run: kind load docker-image logpilot:latest --name chart-testing
       - name: Install logpilot
-        run: |
-          kubectl create configmap logpilot \
-            --from-file=src/main.py \
-            --from-file=src/log_archiver.py \
-            --from-file=src/index.html \
-            --from-file=pyproject.toml \
-            -n log-viewer-testing
-          kubectl apply -f k8s/ -n log-viewer-testing
+        run: kubectl apply -f k8s/ -n log-viewer-testing
       - name: Wait for ready
         run: kubectl wait -n log-viewer-testing --for=condition=ready pod --selector app.kubernetes.io/name=logpilot --timeout=120s
       - name: Start port forwarding
