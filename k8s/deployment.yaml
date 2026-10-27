@@ -24,13 +24,13 @@ spec:
         # The version-bumper workflow publishes a public ghcr.io/<owner>/logpilot:<version>
         # image and rewrites this line. For a local build before that release:
         #   podman build -t logpilot:latest .
-        image: logpilot:latest
+        image: ghcr.io/jessegoodier/logpilot:0.9.2
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5001
         env:
         - name: APP_VERSION
-          value: "0.9.1"
+          value: "0.9.2"
         - name: RETAIN_ALL_POD_LOGS
           value: "true"
         - name: MAX_LOG_RETENTION_MINUTES
